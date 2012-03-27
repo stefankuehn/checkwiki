@@ -1,0 +1,396 @@
+# This is a collection of the most sql-statments for checkwiki.
+
+#######################################
+
+# new project into database
+
+		#####################
+		1. Dump herunterladen
+		dumpload
+
+		######################
+		2. Project einfügen
+		mysql -u sk u_sk_yarrow
+		select max(id) from cw_project where id != 99;
+
+		insert into cw_project (id, project, lang, wikipage, translation_page, last_dump) values ( 80, 'specieswiki', 'species', '', '', '');
+
+		######################
+		3. Dump scannen
+		perl -w new_checkwiki.pl p=specieswiki m=dump
+
+		######################
+		4. Testen ob Fehler in Datenbank
+		mysql -u sk u_sk_yarrow
+		select count(*) from cw_error where project ='svwikisource';
+
+		######################
+		# jetzt automatisch
+		# 5. anlegen der Ausgabedatei  svwikisource_error_list.txt (
+
+		######################
+		6. live scan
+		perl -w new_checkwiki.pl p=svwikisource m=live
+
+
+########################################
+
+create table cw_project
+(id bigint, 
+project varchar(100), 
+lang  varchar(100), 
+last_dump  varchar(100), 
+wikipage  varchar(400), 
+translation_page  varchar(400)
+);
+
+
+drop table cw_dumpscan ;
+
+create table cw_dumpscan
+(project varchar(100),
+error_id int(12),
+title varchar(4000),
+error int (8),
+notice varchar(4000), 
+ok int(1), 
+found datetime);
+
+
+
+
+
+###########################################################################################
+-- Tabele cw_error
+
+create table cw_error(
+project varchar(100),
+error_id int(12),
+title  varchar(4000),
+error int(8),
+notice varchar(4000),
+ok int(1),
+found datetime
+);
+
+create table cw_error_desc(
+project varchar(100),
+id int(8),
+prio int(4),
+name varchar(255),
+text varchar(4000) ,
+name_trans varchar(255),
+text_trans varchar(4000)
+);
+
+
+
+###########################################################################################
+
+-- Table for overview, update by Cronjob with merge
+create table cw_overview
+(id int(8),
+project varchar(100),
+lang varchar(100),
+errors bigint,
+done bigint,
+last_dump varchar(4000),
+last_update varchar(4000),
+project_page varchar(4000),
+translation_page varchar(4000)
+);
+
+select id,project, lang, errors, done, last_dump, last_update from cw_overview;
+
+-- insert all projects
+truncate table cw_overview ;
+insert into cw_overview (id, project, lang, last_dump, project_page, translation_page)
+(select id, project, lang, last_dump, wikipage, translation_page from cw_project);
+
+-- update done
+-- http://dev.mysql.com/doc/refman/5.1/de/update.html
+update cw_overview, (
+select a.project, IFNULL(b.done,0) done  from cw_project a
+  left outer join(
+  select count(*) done, project from cw_error where ok = 1 group by project
+   ) b
+  on a.project = b.project) basis
+set cw_overview.done = basis.done
+where cw_overview.project = basis.project;
+
+-- update error
+update cw_overview, (
+select a.project, IFNULL(b.errors,0) errors  from cw_project a
+  left outer join(
+  select count(*) errors, project from cw_error group by project
+   ) b
+  on a.project = b.project) basis
+set cw_overview.errors = basis.errors
+where cw_overview.project = basis.project;
+
+-- update last_dump
+update cw_overview, (
+select a.project, b.found found from cw_project a
+  left outer join(
+  select max(found) found, project from cw_error group by project
+   ) b
+  on a.project = b.project
+ ) basis
+set cw_overview.last_update = basis.found
+where cw_overview.project = basis.project;
+
+###########################################################################################
+# Tabelle cw_overview_errors
+drop table cw_overview_errors;
+create table cw_overview_errors
+(project varchar(100),
+id int(8),
+errors bigint,
+done bigint,
+name varchar(4000),
+name_trans varchar(4000),
+prio int(8)
+);
+
+select project, id, errors, done, name, name_trans, prio from cw_overview_errors;
+select project, id, errors, done from cw_overview_errors where project = 'dewiki';
+select project, id, errors, done from cw_overview_errors where errors > 0 or done > 0;
+
+
+select project, 0, sum(errors), sum(done) from cw_overview_errors where project = 'pdcwiki'
+union all
+select project, prio, sum(errors), sum(done) from cw_overview_errors where project = 'pdcwiki'  group by prio order by prio;
+
+select  IFNULL(sum(errors),0) ,prio , IFNULL(sum(done),0) from cw_overview_errors where project = 'jawiki' group by prio having prio > 0 order by prio;
+
+
+-- insert all errors
+truncate table cw_overview_errors ;
+insert into cw_overview_errors (project, id, name, name_trans, prio, errors, done)
+(select project, id, name, name_trans, prio, null, null from cw_error_desc);
+
+-- update error
+update cw_overview_errors, (
+select a.project, IFNULL(b.errors,0) errors, b.id  from cw_project a
+  left outer join(
+  select count(*) errors, project, error id 
+  from cw_error 
+  group by project, error
+   ) b
+  on a.project = b.project) basis
+set cw_overview_errors.errors = basis.errors
+where cw_overview_errors.project = basis.project
+and cw_overview_errors.id = basis.id;
+
+--update done
+update cw_overview_errors, (
+select a.project, IFNULL(b.done,0)done, b.id  from cw_project a
+  left outer join(
+  select count(*) done, project, error id 
+  from cw_error 
+  where ok = 1 
+  group by project, error
+   ) b
+  on a.project = b.project) basis
+set cw_overview_errors.done = basis.done
+where cw_overview_errors.project = basis.project
+and cw_overview_errors.id = basis.id;
+
+--insert errors without detection
+insert into cw_overview_errors (project, id, name, name_trans, prio, errors, done)
+(select a.project, a.id, a.name, a.name_trans, a.prio, null, null 
+from cw_error_desc a
+left outer join cw_overview_errors b
+on (a.id = b.id and a.project=b.project)
+where b.project is null 
+and b.id is null)
+;
+
+#############################################################
+Statistic for longtime 
+
+drop table cw_statistic_all;
+create table cw_statistic_all
+(project varchar(100),
+daytime datetime,
+errors bigint);
+
+insert into cw_statistic_all (select project, now(),  ifnull(errors,0) + ifnull(done, 0) errors from cw_overview order by project);
+
+
+
+
+--Statistiv for 100 days every error
+	drop table cw_statistic;
+	create table cw_statistic
+	(project varchar(100),
+	id int(8),
+	nr int(8),
+	daytime datetime,
+	errors bigint);
+
+update cw_statistic set nr=nr+1;
+insert into cw_statistic (select project, id, 1 nr, now(),  ifnull(errors,0) + ifnull(done, 0) errors from cw_overview_errors order by project, id);
+delete from cw_statistic where nr > 100;
+
+
+#############################################################
+Starter
+
+-- table
+drop table cw_starter;
+create table cw_starter
+(project varchar(100),
+errors_done bigint,
+errors_new bigint,
+errors_dump bigint,
+errors_change bigint,
+errors_old bigint,
+last_run_change varchar(100)
+);
+
+
+#############################################################
+new
+
+drop table cw_new;
+create table cw_new(
+project  varchar(100),
+title varchar(4000),
+daytime datetime,
+scan_live boolean default false )
+;
+
+change
+
+drop table cw_change;
+create table cw_change(
+project  varchar(100),
+title varchar(4000),
+daytime datetime,
+scan_live boolean default false )
+;
+
+
+
+
+
+#############################################################
+Templatetiger
+drop table tt ;
+
+create table tt
+    (
+	project varchar(100),
+	id	int,
+	title varchar(4000) ,
+	template int,
+	name varchar(4000),
+	number int,
+	parameter varchar(4000),
+	value text
+	)
+;
+
+
+##############################################################
+-- Löschen eines Projectes
+delete from cw_project where project = 'pdcwiki';
+insert into cw_dumpscan values ( 'pdcwiki', 'test3', 123, false);
+
+
+-- Anzahl gefunder Fehler aller Projecte
+select project, count(*)
+from cw_dumpscan
+where scan_live = false
+group by project
+order by project;
+
+
+-- Abfrage nach Anzahl der Fehler für ein Project
+select project, error_id, count(*)
+from cw_dumpscan
+where project = 'dewiki'
+group by error_id;
+
+
+-- Liste aller Error_ID mit ungescannten Artikeln
+select error_id, count(*) from 
+	(select * 
+	from cw_dumpscan 
+	where project = 'pdcwiki'
+	and scan_live = false
+	) a
+group by a.error_id
+	;
+	
+-- Liste mit Artikeln, die noch nicht gescannt wurden
+select * 	
+from cw_dumpscan 	
+where project = 'pdcwiki' 	
+and scan_live = false ;
+	
+	
+	
+	
+-- jeweils die ersten 5 Artikel ( Beispiel mit Union)
+select * from 
+	(select * 
+	from cw_dumpscan 
+	where project = 'pdcwiki'
+	and scan_live = false
+	and error_id = 30
+	limit 5) a
+union all
+select * from 
+	(select * 
+	from cw_dumpscan 
+	where project = 'pdcwiki'
+	and scan_live = false
+	and error_id = 40
+	limit 5) b
+;
+
+
+- Wie viele dump Artikel noch nicht live gescannt?
+select project,count(*) from cw_dumpscan where scan_live = 0 group by project;
+
+-- die ältesten Artikel in der DB 
+select found from cw_error where project = 'cswiki' and DATEDIFF(now(),found) > 31 order by DATEDIFF(now(),found) desc limit 25;
+
+-- älter als 100 Tage --> old
+select project, count(*) from cw_error where DATEDIFF(now(),found) > 100 group by project;
+
+-- Statistik eines Projectes
+-- alles
+select * from cw_statistic_all where project = 'dewiki';
+select * from cw_statistic_all where project = 'dewiki' and DATEDIFF(now(),daytime) = 7 limit 1;
+
+-- Statistik letzte Tage
+select a.project , c.errors last, b.errors one, a.errors, a.errors-b.errors diff1, a.errors-c.errors diff7 from (
+select project, ifnull(errors,0) errors from cw_statistic_all where project = 'jawiki' and DATEDIFF(now(),daytime) = 0 limit 1
+)a join
+(
+select project, ifnull(errors,0) errors from cw_statistic_all where project = 'jawiki' and DATEDIFF(now(),daytime) = 1 limit 1
+)b
+on (a.project = b.project)
+join
+(select project, ifnull(errors,0) errors from cw_statistic_all where project = 'jawiki' and DATEDIFF(now(),daytime) = 7 limit 1
+)c
+on (a.project = c.project);
+;
+
+
+-- Statistik letzte Tage
+select a.project , c.errors last, b.errors one, a.errors, a.errors-b.errors diff1, a.errors-c.errors diff7 from (
+select project, ifnull(errors,0) errors from cw_statistic_all where DATEDIFF(now(),daytime) = 0
+)a join
+(
+select project, ifnull(errors,0) errors from cw_statistic_all where DATEDIFF(now(),daytime) = 1
+)b
+on (a.project = b.project)
+join
+(select project, ifnull(errors,0) errors from cw_statistic_all where DATEDIFF(now(),daytime) = 7
+)c
+on (a.project = c.project);
+;

@@ -1,0 +1,23 @@
+
+TODO-List for CheckWikipedia
+
+######################
+# high priority
+######################
+
+- Version 2.0 --> objectoriented perl
+- reprogramming whole script
+- installing testfiles for script and packages
+- scanning dumps 
+
+######################
+# middle priority
+######################
+
+- whitelist for pages
+
+######################
+# low priority
+######################
+
+- check frwiktionary
