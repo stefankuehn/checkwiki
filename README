@@ -11,8 +11,6 @@ License
 GPL3 license
 
 
-Sources for Word Lists:
------------------------
 
 
 URLs:
@@ -23,3 +21,13 @@ http://toolserver.org/~sk/cw/
 
 The full documentation can be found at:
 http://de.wikipedia.org/wiki/Benutzer:Stefan_Kühn/Check_Wikipedia
+
+
+Subprojects
+-----------
+
+Templatetiger
+http://de.wikipedia.org/wiki/Wikipedia:WikiProjekt_Vorlagenauswertung/en
+
+Personendata
+http://de.wikipedia.org/wiki/Wikipedia:Personendaten/Wartung/Fehlerliste
