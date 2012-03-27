@@ -14,10 +14,13 @@ TODO-List for CheckWikipedia
 # middle priority
 ######################
 
-- whitelist for pages
+- including project templatetiger
+- including project persondata
+- whitelist for pages 
 
 ######################
 # low priority
 ######################
 
 - check frwiktionary
+- including project geocoord
