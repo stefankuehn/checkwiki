@@ -130,7 +130,8 @@ sub load_metadata{
 	#http://de.wikipedia.org/w/api.php?action=query&meta=siteinfo&siprop=general|namespaces|namespacealiases|statistics|magicwords
 	my( $self ) = @_;
 	my $url = $self->api.'?&action=query&meta=siteinfo&siprop=general|namespaces|namespacealiases|statistics|magicwords&format=xml';
-	print $url."\n";
+	# print $url."\n";
+	# TODO
 }
 
 
@@ -142,11 +143,11 @@ sub load_pages_api{
 	# generate URL
 	#http://de.wikipedia.org/w/api.php?action=query&prop=revisions&titles=Eduard%20Imhof|Kjelfossen&rvprop=timestamp|content	
 	my $titles = join('|', @page_list);
-	print $titles."\n";
+	#print $titles."\n";
 	my $encode_titles = uri_escape($titles);	# URL ' ' -> %20 
 	#print $encode_titles."\n";
 	my $url = $self->api.'?action=query&prop=revisions&titles='.$encode_titles.'&rvprop=timestamp|content&format=xml';
-	print $url."\n";
+	#print $url."\n";
 	
 
 	# get XML via API
@@ -162,7 +163,7 @@ sub load_pages_api{
 		$result = $content if ($content) ;	
 
 		#print $result."\n";
-		print 'Gesamtlänge:'.length($result)."\n";
+		#print 'Gesamtlänge:'.length($result)."\n";
 
 		$result =~ s/^.*<pages>//;
 		$result =~ s/<\/pages>.*//;
@@ -170,14 +171,14 @@ sub load_pages_api{
 		shift(@all_pages);
 		foreach my $text_result (@all_pages) {
 			$text_result = '<page '.$text_result;
-			print 'text:'.length($text_result)."\n";
+			#print 'text:'.length($text_result)."\n";
 
 						
 			#get title			
 			$text_result =~ /title="(.*?)"/;
 			my $title = $1;
 			decode_entities($title);		# with HTML::Entities 
-			print 'result: '.$title."\n";
+			#print 'result: '.$title."\n";
 
 			#get pageid
 			my $pageid = 0;			

@@ -8,108 +8,125 @@ use 5.010;
  
 use wikimedia;
 
-print "###########################\n";
-print 'Teil 1'."\n";
-my $wm_agent = eval { new wikimedia(); }  or die ($@);	# neues Object anlegen
-$wm_agent->load_sitematrix_from_api();					# laden der API
+#####################################################
+print '#' x 60 ."\n";
+print 'Test 1 - load sitmatrix from API'."\n\n";
+my $wm_agent = eval { new wikimedia(); }  or die ($@);	# create new object
+$wm_agent->load_sitematrix_from_api();					# load sitmatrix from API
 
-print "###########################\n";
-print "\n".'Teil 2'."\n";
-# List with all languages
+
+#####################################################
+print '#' x 60 ."\n";
+print 'Test 2 - List with all languages'."\n\n";
+
 my @languages =  $wm_agent->get_all_languages;
+print @languages .' languages in sitematrix'."\n";
 
 foreach my $code (@languages){
-	if ($code =~ /^(de|fr|en)/) {
+	if ($code =~ /^(de|fr|en|yi|ru)/) {			# output limit only for test 
 		printf "%-10s %-20s %-20s\n", $code, $wm_agent->get_language_name_en($code), $wm_agent->get_language_name($code);
 	}
 }
-print @languages .' Sprachen'."\n";
 
 
-print "###########################\n";
-print 'Teil 3'."\n";
+#####################################################
+print '#' x 60 ."\n";
+print 'Test 3 - get languages names'."\n\n";
+
 #print $wm_agent->get_language_name_en() ."\n";
 #print $wm_agent->get_language_name() ."\n";
 #print $wm_agent->is_language_code_ok()."\n";
 
-print $wm_agent->get_language_name_en('de') ."\n";
-print $wm_agent->get_language_name('de') ."\n";
-print $wm_agent->get_language_name_en('fr') ."\n";
-print $wm_agent->get_language_name('fr') ."\n";
+printf "%-10s %-20s \n", 'check fr',   $wm_agent->is_language_code_ok('fr') ;
+printf "%-10s %-20s \n", 'check fxy',  $wm_agent->is_language_code_ok('fxy');
 
-print $wm_agent->is_language_code_ok('fr')."\n";
-print $wm_agent->is_language_code_ok('fxy')."\n";
 
-print "#######s####################\n";
-print 'Teil 4'."\n";
 
+#####################################################
+print '#' x 60 ."\n";
+print 'Test 4 - get all projects'."\n\n";
 
 my @projects =  $wm_agent->get_all_projects();
+print scalar @projects.' Project (all, including closed projects)'."\n";
 
-print scalar @projects.' Project (all)'."\n";
 
-print 'Project of de'."\n";
+print "\n";
+print 'projects of de'."\n";
 @projects =  $wm_agent->get_all_projects('de');
-foreach my $test (@projects){
-	print $test."\n";
+foreach my $project_code (@projects){
+	print $project_code."\n";
 }
 
 print "\n";
-print 'Project of fr'."\n";
+print 'projects of fr'."\n";
 @projects =  $wm_agent->get_all_projects ('fr');
-foreach my $test (@projects){
-	print $test."\n";
+foreach my $project_code (@projects){
+	print $project_code."\n";
 }
 
 
 
-print "###########################\n";
-print 'Teil 5 - Article'."\n";
+#####################################################
+print '#' x 60 ."\n";
+print 'Test 5 - get url from project'."\n\n";
 
-
-
-my $ref_all_project = $wm_agent->project();
-
-#print  $ref_all_project."\n";
-my %all_projects = %$ref_all_project;
+my %all_projects = %{$wm_agent->project()};		# get hash of all projects
 
 foreach my $code ( sort keys %all_projects) {
-	#print $code."\n";
-	my $project = $all_projects{$code};
-	#print $project->url."\n";
+	if ($code =~ /^(de|en|yi)/) {		
+		my $project = $all_projects{$code};
+		printf "%-20s %-20s \n", $code , $project->url;
+	}
 }
 
-my $my_project = 'ruwiki';
+
+#####################################################
+print '#' x 60 ."\n";
+print 'Test 6 - get some articles from project'."\n\n";
+
+
+my $my_project = 'dewiki';
 my $curr_project = $all_projects{$my_project};
 #print $curr_project->url."\n";
-$curr_project->load_metadata();
+$curr_project->load_metadata();			#todo
 
-#my @page_list = ('Eduard Imhof', 'Kjelfossen2','Kjelfossen','R&B','Extensible_3D','Kühnheit');
-my @page_list = ('Вильена (микрорегион)');
-my $ref_pages = $curr_project->load_pages_api( @page_list);
-my %pages = %$ref_pages;
-print 'All'."\n";
-print %pages;
-print "\n";
 
-my $test = $page_list[0];
-print $pages{$test}."\n";
+my @page_list = ('Eduard Imhof', 'Kjelfossen2','Kjelfossen','R&B','Extensible 3D','Kühnheit');
+my %pages = %{ $curr_project->load_pages_api( @page_list ) };
+
+
+foreach my $page_name ( @page_list) {
+	my $curr_page = ${$pages{$page_name}}; 	
+	print '-' x 20 ."\n"; 
+	printf "%-20s %-20s \n", 'project',   $curr_page->project ;
+	printf "%-20s %-20s \n", 'Namespace', $curr_page->namespace ;
+	printf "%-20s %-20s \n", 'pageid',    $curr_page->pageid;
+	printf "%-20s %-20s \n", 'title',     $curr_page->title;
+	printf "%-20s %-20s \n", 'timestamp', $curr_page->timestamp;
+	printf "%-20s %-20s \n", 'row_text',  "\n".substr($curr_page->row_text,0,100).'...';
+
+}
+
+#my $test = $page_list[0];
+#print $pages{$page_list[0]}."\n";
 #my $ref_page = $pages{'R&B'};
 #my $curr_page = $$ref_page;
 
-my $curr_page = ${$pages{$test}}; 
 
-printf "%-20s %-20s \n", 'project',   $curr_page->project ;
-printf "%-20s %-20s \n", 'Namespace', $curr_page->namespace ;
-printf "%-20s %-20s \n", 'pageid',    $curr_page->pageid;
-printf "%-20s %-20s \n", 'title',     $curr_page->title;
-printf "%-20s %-20s \n", 'timestamp', $curr_page->timestamp;
-printf "%-20s %-20s \n", 'row_text',  $curr_page->row_text;
 
-print '################################'."\n";
-print $curr_page->row_page;
 
-#print %curr_page;
+#####################################################
+print '#' x 60 ."\n";
+print 'todo'."\n";
+print '----'."\n";
+print "\n";
+print '- article "Extensible_3D" problem'."\n";
+print '- load metadata for project'."\n";
+print '- Pushdown automaton (de: Kellerautomat)'."\n";
+print '- eliminate comments etc.'."\n";
+
+print 'Finish'."\n\n";
+
 
 
 
