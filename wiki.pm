@@ -139,15 +139,24 @@ sub load_metadata{
 sub load_pages_api{
 	my( $self, @page_list ) = @_;
 
+	#normalized titles		(for example -> from="Extensible_3D" to="Extensible 3D"
+	my @normalized_page_list = @page_list;
+	foreach (@normalized_page_list) {
+		$_ =~ s/_/ /g;
+	}
 
 	# generate URL
 	#http://de.wikipedia.org/w/api.php?action=query&prop=revisions&titles=Eduard%20Imhof|Kjelfossen&rvprop=timestamp|content	
-	my $titles = join('|', @page_list);
-	#print $titles."\n";
+	my $titles = join('|', @normalized_page_list);
+	print $titles."\n";
+
 	my $encode_titles = uri_escape($titles);	# URL ' ' -> %20 
+	
+
+
 	#print $encode_titles."\n";
 	my $url = $self->api.'?action=query&prop=revisions&titles='.$encode_titles.'&rvprop=timestamp|content&format=xml';
-	#print $url."\n";
+	print "\n".$url."\n";
 	
 
 	# get XML via API
@@ -217,6 +226,15 @@ sub load_pages_api{
 			$page_hash{$title} = \$new_page;
 		}
 	}
-	return(\%page_hash)
+
+	#result hash with not normalized keyword (	Extensible_3D" to="Extensible 3D )
+	my %result;
+	my $count = @normalized_page_list;
+	for (my $i = 0; $i < $count; $i++) {
+		$result{$page_list[$i]} = $page_hash{$normalized_page_list[$i]}
+	}
+
+
+    return(\%result);
 }
 
