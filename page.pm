@@ -15,6 +15,7 @@ sub new
     my $self = {};
     $self->{_project}   	= undef;		# dewiki
 	$self->{_pageid}  		= undef;		# 12345
+    $self->{_search_title}  = undef;		# Eduard_Imhof  (not normalized)
 	$self->{_title}  		= undef;		# Eduard Imhof
     $self->{_row_page}     	= undef;		# <page .. </page>
     $self->{_row_text}     	= undef;		# '''Eduard Imhof'' is cartograher ...
@@ -38,6 +39,13 @@ sub pageid {
     my ( $self, $pageid ) = @_;
     $self->{_pageid} = $pageid if defined($pageid);
     return ( $self->{_pageid} );
+}
+
+#accessor method for title
+sub search_title {
+    my ( $self, $search_title ) = @_;
+    $self->{_search_title} = $search_title if defined($search_title);
+    return ( $self->{_search_title} );
 }
 
 #accessor method for title

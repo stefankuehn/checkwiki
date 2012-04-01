@@ -91,20 +91,39 @@ my $curr_project = $all_projects{$my_project};
 $curr_project->load_metadata();			#todo
 
 
-my @page_list = ('Eduard Imhof', 'Kjelfossen2','Kjelfossen','R&B','Extensible_3D','Kühnheit');
+my @page_list = ('Eduard_Imhof', 'Kjelfossen2','Kjelfossen','R&B',
+'Extensible_3D','Kühnheit', 'Kategorie:Kartografie', 'Image:Stefan5mini.jpg' );
+
+
+
 my %pages = %{ $curr_project->load_pages_api( @page_list ) };
 
 foreach my $page_name ( @page_list) {
+	
+	my $curr_page = undef;
 	if (exists $pages{$page_name}) {
-		my $curr_page = ${$pages{$page_name}}; 	
-		print '-' x 20 ."\n"; 
-		printf "%-20s %-20s \n", 'project',   $curr_page->project ;
-		printf "%-20s %-20s \n", 'Namespace', $curr_page->namespace ;
-		printf "%-20s %-20s \n", 'pageid',    $curr_page->pageid;
-		printf "%-20s %-20s \n", 'title',     $curr_page->title;
-		printf "%-20s %-20s \n", 'timestamp', $curr_page->timestamp;
-		printf "%-20s %-20s \n", 'row_text',  "\n".substr($curr_page->row_text,0,100).'...';
+		# correct page name (Eduard Imhof)
+		$curr_page = ${$pages{$page_name}}; 	
+	} else {
+		# find a normalized page name (Eduard_Imhof)
+		foreach my $page_name_check (keys %pages) {
+			print 'check:'.$page_name_check."\n";
+			$curr_page = ${$pages{$page_name_check}};	
+			last if ($curr_page->search_title =~ m/(^|\t)$page_name($|\t)/);
+		}
+		#die;
 	}
+
+	print '-' x 60 ."\n"; 
+	printf "%-20s %-20s \n", 'search for'  , $page_name ;
+	printf "%-20s %-20s \n", 'project'     , $curr_page->project ;
+	printf "%-20s %-20s \n", 'Namespace'   , $curr_page->namespace ;
+	printf "%-20s %-20s \n", 'pageid'      , $curr_page->pageid;
+	printf "%-20s %-20s \n", 'title'       , $curr_page->title;
+	printf "%-20s %-20s \n", 'search_title', $curr_page->search_title;
+	printf "%-20s %-20s \n", 'timestamp'   , $curr_page->timestamp;
+	printf "%-20s %-20s \n", 'row_text'    , "\n".substr($curr_page->row_text,0,100).'...';
+	print 'Page not found!'."\n" if ($curr_page->namespace == 0 and $curr_page->pageid == 0);
 }
 
 #my $test = $page_list[0];

@@ -140,25 +140,22 @@ sub load_pages_api{
 	my( $self, @page_list ) = @_;
 
 	#normalized titles		(for example -> from="Extensible_3D" to="Extensible 3D"
-	my @normalized_page_list = @page_list;
-	foreach (@normalized_page_list) {
-		$_ =~ s/_/ /g;
-	}
+#	my @normalized_page_list = @page_list;
+#	foreach (@normalized_page_list) {
+#		$_ =~ s/_/ /g;
+#	}
 
+	##############
 	# generate URL
 	#http://de.wikipedia.org/w/api.php?action=query&prop=revisions&titles=Eduard%20Imhof|Kjelfossen&rvprop=timestamp|content	
-	my $titles = join('|', @normalized_page_list);
-	print $titles."\n";
-
+	my $titles = join('|', @page_list);
+	#print $titles."\n";
 	my $encode_titles = uri_escape($titles);	# URL ' ' -> %20 
-	
-
-
 	#print $encode_titles."\n";
 	my $url = $self->api.'?action=query&prop=revisions&titles='.$encode_titles.'&rvprop=timestamp|content&format=xml';
-	print "\n".$url."\n";
+	#print "\n".$url."\n";
 	
-
+	###############
 	# get XML via API
 	my $ua = LWP::UserAgent->new;			# http://search.cpan.org/~gaas/libwww-perl-6.03/lib/LWP/UserAgent.pm
 	$ua->timeout(60);						# timeout for request
@@ -174,65 +171,111 @@ sub load_pages_api{
 		#print $result."\n";
 		#print 'Gesamtlänge:'.length($result)."\n";
 
+
+		# <normalized>...</normalized>
+		my @normalized_page_list = undef;
+		#$normalized_title_result = '';
+		if ($result =~ m/<normalized>(.*?)<\/normalized>/) {
+			my $normalized_title_result = $1;
+			#print $normalized_title_result."\n";
+			my @normalized = split (/<n from="/, $normalized_title_result);
+			shift (@normalized);
+			foreach (@normalized) {
+				$_ =~ s/" to="/\t/;
+				$_ =~ s/" \/>//;
+				#print $_ ."\n";
+			}
+			@normalized_page_list = @normalized 
+		}
+
+
+
+
+		# get all pages
 		$result =~ s/^.*<pages>//;
 		$result =~ s/<\/pages>.*//;
-		my @all_pages = split (/<page /, $result);
-		shift(@all_pages);
-		foreach my $text_result (@all_pages) {
-			$text_result = '<page '.$text_result;
-			#print 'text:'.length($text_result)."\n";
+		my $pages = $result;
+		#print $result."\n";
+		if ($pages ne '') {
+
+			#print length($pages).' Length'."\n";
+			my @all_pages = split (/<page /, $pages );
+			shift (@all_pages);
+			my $count_pages =  @all_pages."\n";
+			#print $count_pages.' pages'."\n";
+
+			
+			foreach my $text_result (@all_pages) {
+				$text_result = '<page '.$text_result;
+				#print 'text:'.length($text_result)."\n";
 
 						
-			#get title			
-			$text_result =~ /title="(.*?)"/;
-			my $title = $1;
-			decode_entities($title);		# with HTML::Entities 
-			#print 'result: '.$title."\n";
+				#get title			
+				$text_result =~ /title="(.*?)"/;
+				my $title = $1;
+				decode_entities($title);		# with HTML::Entities 
+				#print 'result: '.$title."\n";
 
-			#get pageid
-			my $pageid = 0;			
-			if ($text_result =~ /pageid="(.*?)"/ ) {
-				$pageid = $1;
-			}
+				# get not normalized_title (Eduard_Imhof, Eduard_Imhof____ )
+				my @search_title_array;
+				if (@normalized_page_list) {
+					foreach my $norm_title (@normalized_page_list) {
+						#print 'check:'. $norm_title."\n";
+						if ($norm_title =~ m/\t$title/ ) {
+							my $search_title = $norm_title;
+							$search_title =~ s/\t.*//;
+							push(@search_title_array, $search_title);
+						}
+					}
+				}
 
-			#get namespace
-			$text_result =~ /ns="(.*?)"/;
-			my $namespace = $1;
+				#get pageid
+				my $pageid = 0;			
+				if ($text_result =~ /pageid="(.*?)"/ ) {
+					$pageid = $1;
+				}
 
-			#get timestamp of revision			
-			my $timestamp = '';			
-			if ($text_result =~ /<rev timestamp="(.*?)"/ ) {
-				$timestamp = $1;
-			}
+				#get namespace
+				$text_result =~ /ns="(.*?)"/;
+				my $namespace = $1;
 
-			#get text 		
-			my $text = '';			
-			if ($text_result =~ /<rev (?:.)*?>((.|\n)*?)<\/rev>/ ) {
-				$text = decode_entities($1);
-				#$text = $1;
+				#get timestamp of revision			
+				my $timestamp = '';			
+				if ($text_result =~ /<rev timestamp="(.*?)"/ ) {
+					$timestamp = $1;
+				}
+
+				#get text 		
+				my $text = '';			
+				if ($text_result =~ /<rev (?:.)*?>((.|\n)*?)<\/rev>/ ) {
+					$text = decode_entities($1);
+					#$text = $1;
 				
-			}
+				}
 			
-			#print substr($text, 100)."\n";
-			my $new_page = page->new();
-			$new_page->project($self->project);
-			$new_page->pageid($pageid);
-			$new_page->title($title);
-			$new_page->row_page($text_result);
-			$new_page->namespace($namespace);
-			$new_page->timestamp($timestamp);	# ref_timestamp, evt. noch einen load_timestamp
-			$new_page->row_text($text);
+				#print substr($text, 100)."\n";
+				my $new_page = page->new();
+				$new_page->project($self->project);
+				$new_page->pageid($pageid);
+				$new_page->title($title);
+				$new_page->search_title(  join("\t", @search_title_array) );
+				$new_page->row_page($text_result);
+				$new_page->namespace($namespace);
+				$new_page->timestamp($timestamp);	# ref_timestamp, evt. noch einen load_timestamp
+				$new_page->row_text($text);
 
-			$page_hash{$title} = \$new_page;
-		}
+				$page_hash{$title} = \$new_page;
+			}
+		}		 
+
 	}
 
 	#result hash with not normalized keyword (	Extensible_3D" to="Extensible 3D )
-	my %result;
-	my $count = @normalized_page_list;
-	for (my $i = 0; $i < $count; $i++) {
-		$result{$page_list[$i]} = $page_hash{$normalized_page_list[$i]}
-	}
+	my %result = %page_hash;
+#	my $count = @normalized_page_list;
+#	for (my $i = 0; $i < $count; $i++) {
+#		$result{$page_list[$i]} = $page_hash{$normalized_page_list[$i]}
+#	}
 
 
     return(\%result);
