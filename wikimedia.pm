@@ -109,8 +109,8 @@ sub load_sitematrix_from_api {
 #	'http://de.wikipedia.org/w/api.php?action=sitematrix&format=xml',
 #	'http://fr.wikipedia.org/w/api.php?action=sitematrix&format=xml';
 
-	my $url = 'http://de.wikipedia.org/w/api.php?action=sitematrix&format=xml';
-	$url = 'ftp://gibt-es-nicht.example.com/';
+	my $url = 'http://en.wikipedia.org/w/api.php?action=sitematrix&format=xml';
+	#$url = 'ftp://gibt-es-nicht.example.com/';
 
 	my $ua = LWP::UserAgent->new;			# http://search.cpan.org/~gaas/libwww-perl-6.03/lib/LWP/UserAgent.pm
 	$ua->timeout(10);						# timeout for request
@@ -126,14 +126,14 @@ sub load_sitematrix_from_api {
 		# find 
 		#print %$response."\n";
 		#print $result."\n";
-		print 'Load data sucessfull'."\n";
-#		sitematrix ($self, $result);
+		#print 'Load data sucessfull'."\n";
+		$self->sitematrix($result);
 
 	}
 	 else {
 		
-		 # die $response->status_line;
-		warn( 'Problem with API-Connection, maybe no internet');
+		# die $response->status_line;
+		# warn( 'Problem with API-Connection, maybe no internet');
 		
 		# "\t".$response->status_line."\n".
 		# 'Load sitematrix from old file');		
@@ -143,7 +143,7 @@ sub load_sitematrix_from_api {
 
 
     if ( $self->sitematrix ) {
-		print 'analyze sitematrix'."\n";
+		#analyze sitematrix
         
         # get all languages
         my $text = $self->sitematrix;
@@ -235,13 +235,13 @@ sub load_sitematrix_from_api {
 
 			  %all_projects = (%all_projects, ( $dbname, $project_hash_ref));       
 				
-			  if ($dbname eq 'aawikibooks') {
+#			  if ($dbname eq 'aawikibooks') {
 #				print 'DBname:'.$dbname."\n";
 #				print 'Project:'.$project_hash_ref."\n";
 #				my %kurz_neu = %$project_hash_ref;
 #				print 'URL:'.$kurz_neu{'url'}."\n";
 #				print Dumper(\$project_hash_ref);
-			  }
+#			  }
 			
           }
           #print "\n";
@@ -250,6 +250,8 @@ sub load_sitematrix_from_api {
           
           
         }
+
+		#print $all_languages[1]."\n";
 
         languages ($self, \@all_languages);
         languages_name ($self, \%all_language_name);
@@ -396,14 +398,15 @@ sub is_project_code_ok {      # dewiki --> 1, deiswiki-->0
 		return 0;
 	}
 	return undef;
-	
 }
+
 ################################################################
 
 sub load_sitematrix_from_old_file
 {
     local($_);
-    my @data = <DATA>;
+    open(DATA);
+	my @data = <DATA>;
     close(DATA);
 	chomp(@data);                       # delete alle newlines
 	my $data = join ('', @data);        # all lines in one line

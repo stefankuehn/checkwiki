@@ -14,7 +14,7 @@ print 'Test 1 - load sitmatrix from API'."\n\n";
 my $wm_agent = eval { new wikimedia(); }  or die ($@);	# create new object
 $wm_agent->load_sitematrix_from_api();					# load sitmatrix from API
 
-
+#print $wm_agent->sitematrix."\n";
 #####################################################
 print '#' x 60 ."\n";
 print 'Test 2 - List with all languages'."\n\n";
@@ -64,7 +64,22 @@ foreach my $project_code (@projects){
 	print $project_code."\n";
 }
 
+#####################################################
+print '#' x 60 ."\n";
+print 'Test 4b - projects test'."\n\n";
 
+my $test_code = 'dewiki';
+if($wm_agent->is_project_code_ok($test_code)) {
+	print 'project: '.$test_code.' is ok';
+} else {
+	print 'project: '.$test_code.' is not ok';
+}
+$test_code = 'dexywiki';
+if($wm_agent->is_project_code_ok($test_code)) {
+	print 'project: '.$test_code.' is ok';
+} else {
+	print 'project: '.$test_code.' is not ok';
+}
 
 #####################################################
 print '#' x 60 ."\n";
@@ -131,12 +146,20 @@ foreach my $page_name ( @page_list) {
 #my $ref_page = $pages{'R&B'};
 #my $curr_page = $$ref_page;
 
+#####################################################
+print '#' x 60 ."\n";
+print 'Test 7 - scan from dump'."\n\n";
+
+
+
+
 
 #####################################################
 print '#' x 60 ."\n";
 print 'todo'."\n";
 print '----'."\n";
 print "\n";
+print '- dump scan'."\n";
 print '- load metadata for project'."\n";
 print '- Pushdown automaton (de: Kellerautomat)'."\n";
 print '- eliminate comments etc.'."\n";
