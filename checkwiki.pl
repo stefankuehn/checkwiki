@@ -3799,23 +3799,14 @@ sub get_templates{
 	#print $page_namespace."\n"  if ($title eq 'Methanol');
 	
 	# Output for TemplateTiger 
-	if( $output ne '' 
-		and $dump_or_live eq 'dump'
+	if( $dump_or_live eq 'dump'
 		and (   $page_namespace == 0 
 		     or $page_namespace == 6 
 		     or $page_namespace == 104 )
 		) {
 		
-		# old in file
-
-		$output =~ s/\n$//;
-		if ((-e $templatetiger_filename)) {
-			$output = "\n".$output;
-		}
-				
-		print $output ."\n" if ($details_for_page eq 'yes');
+		print $output if ($details_for_page eq 'yes');
 		print TEMPLATETIGER $output;
-		$output = '';
 
 		# new in tt-table of database
 		# for (my $i = 0; $i <=$number_of_template_parts; $i++) {
