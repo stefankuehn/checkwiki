@@ -31,413 +31,413 @@ use warnings;
 # delete_deleted_article_from_db --> Problem old articles
 
 
-	#################################################################
-	# Load Module
-	#################################################################
-	#use lib "C:/perl/lib";
-
-	use URI::Escape;
-	use LWP::UserAgent;
-
-	#use CGI::Carp qw(fatalsToBrowser);
-
-	#use lib '/home/sk/perl/checkwiki';
-	#our $file_module_coordinate = 'coordinates.pm';
-	#if (-e $file_module_coordinate) {
-		#use coordinates ;
-	#}
-	# use new_coordinates;
-
-
-	#use lib '../module';
-	#use wikipedia;
-
-	#use URI::Escape;
-	#use LWP::UserAgent;
-
-	#################################################################
-	# declare_global_directorys
-	#################################################################
-	our $dump_directory		    = '/mnt/user-store/dumps/';		# toolserver
-	# our $dump_directory	= '../../dump/';	# home or usb
-
-	our $output_directory		= '/mnt/user-store/sk/data/checkwiki/';
-	our $input_directory_new 	= '/mnt/user-store/sk/data/new_article/';
-	our $input_directory_change = '/mnt/user-store/sk/data/last_changes/';
-	our $output_templatetiger   = '/mnt/user-store/sk/data/templatetiger/';
-	our $output_geo				= '/mnt/user-store/sk/data/geo/';
-
-	#our $dump_filename  = '/mnt/user-store/dump/dewiki-20080607-pages-articles.xml'; #'Wikipedia-20080502083556.xml';
-	our $dump_filename  = '';
-	#$dump_filename ='../../dump/dewiki-20071217-pages-articles.xml';
-
-	#################################################################
-	# Declaration of variables (global)
-	#################################################################
-
-	our $quit_program			= 'no';		# quit the program (yes,no), for quit the programm in an emergency
-	our $quit_reason			= '';		# quit the program reason
-	our $test_programm 			= 'true';	# only for program tests
-
-	our $dump_or_live   		= '';		# scan modus (dump, live, only)
-	our $silent_modus   		= '';		# silent modus (very low output at screen) for batch
-	our $test_modus   			= '';		# silent modus (very low output at screen) for batch
-
-	our $starter_modus			= '';		# to update in the loadmodus the cw_starter table
-	our $load_modus_done		= 'yes';	# done article from db
-	our $load_modus_new			= 'yes';	# new article from db
-	our $load_modus_dump		= 'yes';	# new article from db
-	our $load_modus_last_change = 'yes';	# last_change article from db
-	our $load_modus_old			= 'yes';	# old article from db
-
-
-	our $details_for_page		= 'no';		# yes/no 	durring the scan you can get more details for a article scan
-
-
-	our $time_start				= time();	# start timer in secound
-	our $time_end				= time();	# end time in secound
-	our $date					= 0;		# date of dump "20060324"
-
-	our $line_number			= 0;		# number of line in dump
-	our $project				= '';		# name of the project 'dewiki'
-	our $language				= '';		# language of dump 'de', 'en';
-	our $page_number			= 0;		# number of pages in namesroom 0
-	our $base 					= '';		# base of article, 'http://de.wikipedia.org/wiki/Hauptseite'
-	our $home					= '';		# base of article, 'http://de.wikipedia.org/wiki/'
-
-	our @namespace;							# namespace values
-											# 0 number
-											# 1 namespace in project language
-											# 2 namespace in english language
-	our	$namespaces_count		= -1;		# number of namespaces
-
-	our @namespacealiases;					# namespacealiases values
-											# 0 number
-											# 1 namespacealias
-	our	$namespacealiases_count= -1;		# number of namespacealiases
-
-	our @namespace_cat;						#all namespaces for categorys
-	our @namespace_image;					#all namespaces for images
-	our @namespace_templates;				#all namespaces for templates
-
-	our @magicword_defaultsort;
-
-	our @magicword_img_thumbnail;
-	our @magicword_img_manualthumb;
-	our @magicword_img_right;
-	our @magicword_img_left;
-	our @magicword_img_none;
-	our @magicword_img_center;
-	our @magicword_img_framed;
-	our @magicword_img_frameless;
-	our @magicword_img_page;
-	our @magicword_img_upright;
-	our @magicword_img_border;
-	our @magicword_img_sub;
-	our @magicword_img_super;
-	our @magicword_img_link;
-	our @magicword_img_alt;
-	our @magicword_img_width;
-	our @magicword_img_baseline;
-	our @magicword_img_top;
-	our @magicword_img_text_top;
-	our @magicword_img_middle;
-	our @magicword_img_bottom;
-	our @magicword_img_text_bottom;
-
-
-	# Wiki-special variables
-
-	our @live_article;						# to-do-list for live (all articles to scan)
-	our $current_live_article	= -1;		# line_number_of_current_live_article
-	our $number_of_live_tests 	= -1;		# Number of articles for live test
-
-	our $current_live_error_scan = -1;		# for scan every 100 article of an error
-	our @live_to_scan ;						# article of one error number which should be scanned
-	our $number_article_live_to_scan = -1;	# all article from one error
-	our @article_was_scanned;				#if an article was scanned, this will insert here
-
-	our $xml_text_from_api = '';				# the text from more then one articles from the API
-
-	our $error_counter 			= -1;		# number of found errors in all article
-
-	our @error_description;					# Error Description
-											# 0 priority in script
-											# 1 title in English
-											# 2 description in English
-											# 3 number of found (only live scanned)
-											# 4 priority of foreign language
-											# 5 title in foreign language
-											# 6 description in foreign language
-											# 7 number of found in last scan (from statistic file)
-											# 8 all known errors (from statistic file + live)
-											# 9  XHTML translation title
-											# 10 XHTML translation description
-
-	our $number_of_error_description = -1;	# number of error_description
-
-
-	our $max_error_count = 50;				# maximum of shown article per error
-	our $maximum_current_error_scan = -1;	# how much shold be scanned for reach the max_error_count
-	our $rest_of_errors_not_scan_yet = '';
-	our $number_of_all_errors_in_all_articles = 0;	#all errors
-
-	our $for_statistic_new_article = 0;
-	our $for_statistic_last_change_article = 0;
-	our $for_statistic_geo_article = 0;
-	our $for_statistic_number_of_articles_with_error = 0;
-
-
-
-	###########################
-	# files
-	###########################
-	our $live_filename  				= 'input_for_live.txt';
-	our $output_live_wiki   			= 'output_for_wikipedia.txt';
-	our $output_dump_wiki   			= 'output_for_wikipedia_dump.txt';
-	our $error_list_filename 			= 'error_list.txt';
-	our $error_list_filename_only 		= 'error_list_only.txt';
-	our $error_list_filename_dump		= 'error_list_dump.txt';				#all errors from the last dump scan
-	our $error_list_filename_backup		= 'error_list_dump_backup.txt';
-	our $error_statistic_filename 		= 'error_statistic.txt';
-	our $error_statistic_filename_only 	= 'error_statistic_only.txt';
-	our $error_statistic_filename_list 	= 'error_statistic_list.txt';
-	our $translation_file   			= 'translation.txt';
-	our $error_list_filename_30 		= 'error_list_error_030.txt';
-	our $error_list_filename_every 		= 'error_list_error';			# for all errors
-
-	our $error_geo_list_filename 		= 'error_geo_list.txt';
-	our $error_geo_list_filename_only 	= 'error_geo_list_only.txt';
-	our $error_geo_list_filename_html	= 'error_geo_list.htm';
-	our $error_geo_list_filename_only_html	= 'error_geo_list_only.htm';
-
-	our $log_file						= 'log.txt';
-	our $templatetiger_filename			= '';
-
-	our @inter_list = ( 'af', 'als', 'an', 'ar',
-						'bg', 'bs',
-						'ca', 'cs', 'cy',
-						'da', 'de',
-						'el', 'en', 'eo', 'es', 'et', 'eu',
-						'fa', 'fi', 'fr', 'fy',
-						'gl', 'gv',
-						'he', 'hi', 'hr', 'hu',
-						'id', 'is', 'it',
-						'ja', 'jv',
-						'ka', 'ko',
-						'la', 'lb', 'lt',
-						'ms',
-						'nds', 'nds_nl', 'nl', 'nn', 'no',
-						'pl', 'pt',
-						'ro', 'ru',
-						'sh', 'simple', 'sk', 'sl', 'sr', 'sv', 'sw',
-						'ta', 'th', 'tr',
-						'uk', 'ur',
-						'vi', 'vo',
-						'yi',
-						'zh'
-					);
-
-	our @foundation_projects = ( 'wikibooks', 'b',
-								'wiktionary', 'wikt',
-								'wikinews',  'n',
-								'wikiquote', 'q',
-								'wikisource', 's',
-								'wikipedia', 'w',
-								'wikispecies', 'species',
-								'wikimedia', 'foundation', 'wmf',
-								'wikiversity',	'v',
-								'commons',
-								'meta', 'metawikipedia', 	'm',
-								'incubator',
-								'mw',
-								'quality',
-								'bugzilla', 'mediazilla',
-								'nost',
-								'testwiki'
-								);
-
-	# current time
-	our ($akSekunden, $akMinuten, $akStunden, $akMonatstag, $akMonat,
-	    $akJahr, $akWochentag, $akJahrestag, $akSommerzeit) = localtime(time);
-	our $CTIME_String = localtime(time);
-	$akMonat 	= $akMonat + 1;
-	$akJahr 	= $akJahr + 1900;
-	$akMonat   	= "0".$akMonat if ($akMonat<10);
-	$akMonatstag = "0".$akMonatstag if ($akMonatstag<10);
-	$akStunden 	= "0".$akStunden if ($akStunden<10);
-	$akMinuten 	= "0".$akMinuten if ($akMinuten<10);
-
-
-	our $translation_page = '';		# name of the page with translation for example in de:  "Wikipedia:WikiProject Check Wikipedia/Übersetzung"
-
-	our $start_text = '';
-	$start_text = $start_text ."The WikiProject '''Check Wikipedia''' will help to clean up the syntax of Wikipedia and to find some other errors.\n";
-	$start_text = $start_text ."\n";
-	$start_text = $start_text ."'''Betatest''' - At the moment the script has some bugs and not every error on this page is an actual error. \n";
-	$start_text = $start_text ."\n";
-
-
-	our $description_text = '';
-	$description_text = $description_text ."== Project description in English == \n";
-
-	$description_text = $description_text ."* '''What is the goal of this project?'''\n";
-	$description_text = $description_text ."** This project should help to clean up the data of all articles in many different languages.\n";
-	$description_text = $description_text ."** If we have a clear and clean syntax in all articles more projects (for example: Wikipedia-DVD) can use our data more easily.\n";
-	$description_text = $description_text ."** The project was inspired by [[:en:Wikipedia:WikiProject Wiki Syntax]].\n";
-	$description_text = $description_text ."** In order to use the data of a Wikipedia project without the Mediawiki software you need to write a parser. If many articles include wrong syntax it is difficult to program the parser since it needs to be complex enough to recognize the syntax errors.\n";
-	$description_text = $description_text ."** This project helps to find many errors in all kinds of language and will support many languages in the future. \n";
-	$description_text = $description_text ."\n";
-
-	$description_text = $description_text ."* '''How does it work?'''\n";
-	$description_text = $description_text ."** The script scans every new [http://dumps.wikimedia.org dump] and creates a list of articles with errors.\n";
-	$description_text = $description_text ."** The script scans all articles on the list on a daily basis to create a new list for users, omitting already-corrected articles.\n";
-	$description_text = $description_text ."** The script is written in Perl by: [[:de:User:Stefan Kühn|Stefan Kühn]] "."\n";
-	$description_text = $description_text ."** You can download the script [http://toolserver.org/~sk/checkwiki/checkwiki.pl here]. It is licensed under GPL."."\n";
-	$description_text = $description_text ."** [[:de:User:Stefan Kühn/Check Wikipedia|New features, last changes and discussion]]. "."\n";
-	$description_text = $description_text ."\n";
-
-	$description_text = $description_text ."* '''What can you do?'''\n";
-	$description_text = $description_text ."** The script creates a new error page at the toolserver every day. Please copy and paste the daily updated page at the toolserver (See downloads) to this page here. Attention: That page is a UTF-8 document. In case your browser cannot display the file in UTF-8 you can copy it into a text editor (for example: Notepad++) and convert it to UTF-8. \n";
-	$description_text = $description_text ."** You can fix an error in one or more articles. \n";
-	$description_text = $description_text ."** You can delete all fixed articles from this list. \n";
-	$description_text = $description_text ."** If all articles in one category have been fixed you can delete this category. \n";
-	$description_text = $description_text ."** You can suggest a new category of errors to the author of the script. \n";
-	$description_text = $description_text ."** You can also inform the author if you want this project to be implemented into your language's Wikipedia. \n";
-	$description_text = $description_text ."\n";
-
-	$description_text = $description_text ."* '''Please don't… '''\n";
-	$description_text = $description_text ."** insert an article by hand since it will disappear from the list with the next automatic update of this page. \n";
-	$description_text = $description_text ."** try to fix spelling mistakes within this page since all manual changes will disappear as well with the next update. Instead, send an e-mail or message to the author so he can fix the spelling in the script. \n";
-	$description_text = $description_text ."\n";
-
-
-	our $category_text = '';
-
-	our $top_priority_script = 'Top priority';
-	our $top_priority_project = '';
-	our $middle_priority_script = 'Middle priority';
-	our $middle_priority_project = '';
-	our $lowest_priority_script = 'Lowest priority';
-	our $lowest_priority_project = '';
-
-
-	our $dbh; 	# DatenbaaseHandler
-
-
-
-	###############################
-	# variables for one article
-	###############################
-		$page_number 	= $page_number + 1;
-	our $title					= '';		# title of the current article
-	our $page_id				= -1;		# page id of the current article
-	our $revision_id			= -1;		# revision id of the current article
-	our $revision_time			= -1;		# revision time of the current article
-	our $text					= '';		# text of the current article  (for work)
-	our $text_origin			= '';		# text of the current article origin (for save)
-	our $text_without_comments  = '';		# text of the current article without_comments (for save)
-
-
-	our	$page_namespace			= -100;		# namespace of page
-	our $page_is_redirect   	= 'no';
-	our $page_is_disambiguation = 'no';
-
-	our $page_categories 		= '';
-	our $page_interwikis 		= '';
-
-	our $page_has_error 		= 'no';		# yes/no 	error in this page
-	our $page_error_number		= -1;		# number of all article for this page
-
-	our @comments;							# 0 pos_start
-											# 1 pos_end
-											# 2 comment
-	our $comment_counter		= -1;		#number of comments in this page
-
-	our @category;							# 0 pos_start
-											# 1 pos_end
-											# 2 category	Test
-											# 3 linkname	Linkname
-											# 4 original	[[Category:Test|Linkname]]
-
-	our $category_counter		= -1;
-	our $category_all			= '';		# all categries
-
-	our @interwiki;							# 0 pos_start
-											# 1 pos_end
-											# 2 interwiki	Test
-											# 3 linkname	Linkname
-											# 4 original	[[de:Test|Linkname]]
-											# 5 language
-
-	our $interwiki_counter		= -1;
-
-	our @lines;								# text seperated in lines
-	our @headlines;							# headlines
-	our @section;							# text between headlines
-	undef(@section);
-
-	our @lines_first_blank;					# all lines where the first character is ' '
-
-	our @templates_all;						# all templates
-	our @template;							# templates with values
-											# 0 number of template
-											# 1 templatename
-											# 2 template_row
-											# 3 attribut
-											# 4 value
-	our $number_of_template_parts = -1;		# number of all template parts
-
-	our @links_all;							# all links
-	our @images_all;						# all images
-	our @isbn;								# all ibsn of books
-	our @ref;								# all ref
-
-	our $page_has_geo_error 	= 'no';		# yes/no 	geo error in this page
-	our $page_geo_error_number  = -1;		# number of all article for this page
-
-	our $end_of_dump = 'no';				# when last article from dump scan then 'yes', else 'no'
-	our $end_of_live = 'no';				# when last article from live scan then 'yes', else 'no'
-
-
-
-
-
-	check_input_arguments();
-	open_db();
-	open_file() 							if ($quit_program eq 'no');			# logfile, dumpfile,  metadata (API, File)
-
-	get_error_description()					if ($quit_program eq 'no');			# all errordescription from this script
-	load_text_translation() 				if ($quit_program eq 'no');			# load translation from wikipage
-	output_errors_desc_in_db() 				if ($quit_program eq 'no');			# update the database with newest error description
-	output_text_translation_wiki()  		if ($quit_program eq 'no');			# output the new wikipage for translation
-
-	load_article_for_live_scan()  			if ($quit_program eq 'no');			# only for live
-	scan_pages() 							if ($quit_program eq 'no');			# scan all aricle
-	close_file();																# close dump or templatetiger-file
-
-	update_table_cw_error_from_dump()		if ($quit_program eq 'no');
-	delete_deleted_article_from_db()		if ($quit_program eq 'no');
-	delete_article_from_table_cw_new()		if ($quit_program eq 'no');
-	delete_article_from_table_cw_change()	if ($quit_program eq 'no');
-	update_table_cw_starter();
-
-	#output_errors() 						if ($quit_program eq 'no');
-	output_little_statistic()				if ($quit_program eq 'no');			# print counter of found errors
-	output_duration() 						if ($quit_program eq 'no');			# print time at the end
-
-	print $quit_reason 						if ($quit_reason  ne '');
-
-	close_db();
-	close_logfile();
-	print 'finish'."\n";
-
-
-	#################################################################
-	#################################################################
-	#################################################################
-	#################################################################
-	#################################################################
+#################################################################
+# Load Module
+#################################################################
+#use lib "C:/perl/lib";
+
+use URI::Escape;
+use LWP::UserAgent;
+
+#use CGI::Carp qw(fatalsToBrowser);
+
+#use lib '/home/sk/perl/checkwiki';
+#our $file_module_coordinate = 'coordinates.pm';
+#if (-e $file_module_coordinate) {
+	#use coordinates ;
+#}
+# use new_coordinates;
+
+
+#use lib '../module';
+#use wikipedia;
+
+#use URI::Escape;
+#use LWP::UserAgent;
+
+#################################################################
+# declare_global_directorys
+#################################################################
+our $dump_directory		    = '/mnt/user-store/dumps/';		# toolserver
+# our $dump_directory	= '../../dump/';	# home or usb
+
+our $output_directory		= '/mnt/user-store/sk/data/checkwiki/';
+our $input_directory_new 	= '/mnt/user-store/sk/data/new_article/';
+our $input_directory_change = '/mnt/user-store/sk/data/last_changes/';
+our $output_templatetiger   = '/mnt/user-store/sk/data/templatetiger/';
+our $output_geo				= '/mnt/user-store/sk/data/geo/';
+
+#our $dump_filename  = '/mnt/user-store/dump/dewiki-20080607-pages-articles.xml'; #'Wikipedia-20080502083556.xml';
+our $dump_filename  = '';
+#$dump_filename ='../../dump/dewiki-20071217-pages-articles.xml';
+
+#################################################################
+# Declaration of variables (global)
+#################################################################
+
+our $quit_program			= 'no';		# quit the program (yes,no), for quit the programm in an emergency
+our $quit_reason			= '';		# quit the program reason
+our $test_programm 			= 'true';	# only for program tests
+
+our $dump_or_live   		= '';		# scan modus (dump, live, only)
+our $silent_modus   		= '';		# silent modus (very low output at screen) for batch
+our $test_modus   			= '';		# silent modus (very low output at screen) for batch
+
+our $starter_modus			= '';		# to update in the loadmodus the cw_starter table
+our $load_modus_done		= 'yes';	# done article from db
+our $load_modus_new			= 'yes';	# new article from db
+our $load_modus_dump		= 'yes';	# new article from db
+our $load_modus_last_change = 'yes';	# last_change article from db
+our $load_modus_old			= 'yes';	# old article from db
+
+
+our $details_for_page		= 'no';		# yes/no 	durring the scan you can get more details for a article scan
+
+
+our $time_start				= time();	# start timer in secound
+our $time_end				= time();	# end time in secound
+our $date					= 0;		# date of dump "20060324"
+
+our $line_number			= 0;		# number of line in dump
+our $project				= '';		# name of the project 'dewiki'
+our $language				= '';		# language of dump 'de', 'en';
+our $page_number			= 0;		# number of pages in namesroom 0
+our $base 					= '';		# base of article, 'http://de.wikipedia.org/wiki/Hauptseite'
+our $home					= '';		# base of article, 'http://de.wikipedia.org/wiki/'
+
+our @namespace;							# namespace values
+										# 0 number
+										# 1 namespace in project language
+										# 2 namespace in english language
+our	$namespaces_count		= -1;		# number of namespaces
+
+our @namespacealiases;					# namespacealiases values
+										# 0 number
+										# 1 namespacealias
+our	$namespacealiases_count= -1;		# number of namespacealiases
+
+our @namespace_cat;						#all namespaces for categorys
+our @namespace_image;					#all namespaces for images
+our @namespace_templates;				#all namespaces for templates
+
+our @magicword_defaultsort;
+
+our @magicword_img_thumbnail;
+our @magicword_img_manualthumb;
+our @magicword_img_right;
+our @magicword_img_left;
+our @magicword_img_none;
+our @magicword_img_center;
+our @magicword_img_framed;
+our @magicword_img_frameless;
+our @magicword_img_page;
+our @magicword_img_upright;
+our @magicword_img_border;
+our @magicword_img_sub;
+our @magicword_img_super;
+our @magicword_img_link;
+our @magicword_img_alt;
+our @magicword_img_width;
+our @magicword_img_baseline;
+our @magicword_img_top;
+our @magicword_img_text_top;
+our @magicword_img_middle;
+our @magicword_img_bottom;
+our @magicword_img_text_bottom;
+
+
+# Wiki-special variables
+
+our @live_article;						# to-do-list for live (all articles to scan)
+our $current_live_article	= -1;		# line_number_of_current_live_article
+our $number_of_live_tests 	= -1;		# Number of articles for live test
+
+our $current_live_error_scan = -1;		# for scan every 100 article of an error
+our @live_to_scan ;						# article of one error number which should be scanned
+our $number_article_live_to_scan = -1;	# all article from one error
+our @article_was_scanned;				#if an article was scanned, this will insert here
+
+our $xml_text_from_api = '';				# the text from more then one articles from the API
+
+our $error_counter 			= -1;		# number of found errors in all article
+
+our @error_description;					# Error Description
+										# 0 priority in script
+										# 1 title in English
+										# 2 description in English
+										# 3 number of found (only live scanned)
+										# 4 priority of foreign language
+										# 5 title in foreign language
+										# 6 description in foreign language
+										# 7 number of found in last scan (from statistic file)
+										# 8 all known errors (from statistic file + live)
+										# 9  XHTML translation title
+										# 10 XHTML translation description
+
+our $number_of_error_description = -1;	# number of error_description
+
+
+our $max_error_count = 50;				# maximum of shown article per error
+our $maximum_current_error_scan = -1;	# how much shold be scanned for reach the max_error_count
+our $rest_of_errors_not_scan_yet = '';
+our $number_of_all_errors_in_all_articles = 0;	#all errors
+
+our $for_statistic_new_article = 0;
+our $for_statistic_last_change_article = 0;
+our $for_statistic_geo_article = 0;
+our $for_statistic_number_of_articles_with_error = 0;
+
+
+
+###########################
+# files
+###########################
+our $live_filename  				= 'input_for_live.txt';
+our $output_live_wiki   			= 'output_for_wikipedia.txt';
+our $output_dump_wiki   			= 'output_for_wikipedia_dump.txt';
+our $error_list_filename 			= 'error_list.txt';
+our $error_list_filename_only 		= 'error_list_only.txt';
+our $error_list_filename_dump		= 'error_list_dump.txt';				#all errors from the last dump scan
+our $error_list_filename_backup		= 'error_list_dump_backup.txt';
+our $error_statistic_filename 		= 'error_statistic.txt';
+our $error_statistic_filename_only 	= 'error_statistic_only.txt';
+our $error_statistic_filename_list 	= 'error_statistic_list.txt';
+our $translation_file   			= 'translation.txt';
+our $error_list_filename_30 		= 'error_list_error_030.txt';
+our $error_list_filename_every 		= 'error_list_error';			# for all errors
+
+our $error_geo_list_filename 		= 'error_geo_list.txt';
+our $error_geo_list_filename_only 	= 'error_geo_list_only.txt';
+our $error_geo_list_filename_html	= 'error_geo_list.htm';
+our $error_geo_list_filename_only_html	= 'error_geo_list_only.htm';
+
+our $log_file						= 'log.txt';
+our $templatetiger_filename			= '';
+
+our @inter_list = ( 'af', 'als', 'an', 'ar',
+					'bg', 'bs',
+					'ca', 'cs', 'cy',
+					'da', 'de',
+					'el', 'en', 'eo', 'es', 'et', 'eu',
+					'fa', 'fi', 'fr', 'fy',
+					'gl', 'gv',
+					'he', 'hi', 'hr', 'hu',
+					'id', 'is', 'it',
+					'ja', 'jv',
+					'ka', 'ko',
+					'la', 'lb', 'lt',
+					'ms',
+					'nds', 'nds_nl', 'nl', 'nn', 'no',
+					'pl', 'pt',
+					'ro', 'ru',
+					'sh', 'simple', 'sk', 'sl', 'sr', 'sv', 'sw',
+					'ta', 'th', 'tr',
+					'uk', 'ur',
+					'vi', 'vo',
+					'yi',
+					'zh'
+				);
+
+our @foundation_projects = ( 'wikibooks', 'b',
+							'wiktionary', 'wikt',
+							'wikinews',  'n',
+							'wikiquote', 'q',
+							'wikisource', 's',
+							'wikipedia', 'w',
+							'wikispecies', 'species',
+							'wikimedia', 'foundation', 'wmf',
+							'wikiversity',	'v',
+							'commons',
+							'meta', 'metawikipedia', 	'm',
+							'incubator',
+							'mw',
+							'quality',
+							'bugzilla', 'mediazilla',
+							'nost',
+							'testwiki'
+							);
+
+# current time
+our ($akSekunden, $akMinuten, $akStunden, $akMonatstag, $akMonat,
+    $akJahr, $akWochentag, $akJahrestag, $akSommerzeit) = localtime(time);
+our $CTIME_String = localtime(time);
+$akMonat 	= $akMonat + 1;
+$akJahr 	= $akJahr + 1900;
+$akMonat   	= "0".$akMonat if ($akMonat<10);
+$akMonatstag = "0".$akMonatstag if ($akMonatstag<10);
+$akStunden 	= "0".$akStunden if ($akStunden<10);
+$akMinuten 	= "0".$akMinuten if ($akMinuten<10);
+
+
+our $translation_page = '';		# name of the page with translation for example in de:  "Wikipedia:WikiProject Check Wikipedia/Übersetzung"
+
+our $start_text = '';
+$start_text = $start_text ."The WikiProject '''Check Wikipedia''' will help to clean up the syntax of Wikipedia and to find some other errors.\n";
+$start_text = $start_text ."\n";
+$start_text = $start_text ."'''Betatest''' - At the moment the script has some bugs and not every error on this page is an actual error. \n";
+$start_text = $start_text ."\n";
+
+
+our $description_text = '';
+$description_text = $description_text ."== Project description in English == \n";
+
+$description_text = $description_text ."* '''What is the goal of this project?'''\n";
+$description_text = $description_text ."** This project should help to clean up the data of all articles in many different languages.\n";
+$description_text = $description_text ."** If we have a clear and clean syntax in all articles more projects (for example: Wikipedia-DVD) can use our data more easily.\n";
+$description_text = $description_text ."** The project was inspired by [[:en:Wikipedia:WikiProject Wiki Syntax]].\n";
+$description_text = $description_text ."** In order to use the data of a Wikipedia project without the Mediawiki software you need to write a parser. If many articles include wrong syntax it is difficult to program the parser since it needs to be complex enough to recognize the syntax errors.\n";
+$description_text = $description_text ."** This project helps to find many errors in all kinds of language and will support many languages in the future. \n";
+$description_text = $description_text ."\n";
+
+$description_text = $description_text ."* '''How does it work?'''\n";
+$description_text = $description_text ."** The script scans every new [http://dumps.wikimedia.org dump] and creates a list of articles with errors.\n";
+$description_text = $description_text ."** The script scans all articles on the list on a daily basis to create a new list for users, omitting already-corrected articles.\n";
+$description_text = $description_text ."** The script is written in Perl by: [[:de:User:Stefan Kühn|Stefan Kühn]] "."\n";
+$description_text = $description_text ."** You can download the script [http://toolserver.org/~sk/checkwiki/checkwiki.pl here]. It is licensed under GPL."."\n";
+$description_text = $description_text ."** [[:de:User:Stefan Kühn/Check Wikipedia|New features, last changes and discussion]]. "."\n";
+$description_text = $description_text ."\n";
+
+$description_text = $description_text ."* '''What can you do?'''\n";
+$description_text = $description_text ."** The script creates a new error page at the toolserver every day. Please copy and paste the daily updated page at the toolserver (See downloads) to this page here. Attention: That page is a UTF-8 document. In case your browser cannot display the file in UTF-8 you can copy it into a text editor (for example: Notepad++) and convert it to UTF-8. \n";
+$description_text = $description_text ."** You can fix an error in one or more articles. \n";
+$description_text = $description_text ."** You can delete all fixed articles from this list. \n";
+$description_text = $description_text ."** If all articles in one category have been fixed you can delete this category. \n";
+$description_text = $description_text ."** You can suggest a new category of errors to the author of the script. \n";
+$description_text = $description_text ."** You can also inform the author if you want this project to be implemented into your language's Wikipedia. \n";
+$description_text = $description_text ."\n";
+
+$description_text = $description_text ."* '''Please don't… '''\n";
+$description_text = $description_text ."** insert an article by hand since it will disappear from the list with the next automatic update of this page. \n";
+$description_text = $description_text ."** try to fix spelling mistakes within this page since all manual changes will disappear as well with the next update. Instead, send an e-mail or message to the author so he can fix the spelling in the script. \n";
+$description_text = $description_text ."\n";
+
+
+our $category_text = '';
+
+our $top_priority_script = 'Top priority';
+our $top_priority_project = '';
+our $middle_priority_script = 'Middle priority';
+our $middle_priority_project = '';
+our $lowest_priority_script = 'Lowest priority';
+our $lowest_priority_project = '';
+
+
+our $dbh; 	# DatenbaaseHandler
+
+
+
+###############################
+# variables for one article
+###############################
+	$page_number 	= $page_number + 1;
+our $title					= '';		# title of the current article
+our $page_id				= -1;		# page id of the current article
+our $revision_id			= -1;		# revision id of the current article
+our $revision_time			= -1;		# revision time of the current article
+our $text					= '';		# text of the current article  (for work)
+our $text_origin			= '';		# text of the current article origin (for save)
+our $text_without_comments  = '';		# text of the current article without_comments (for save)
+
+
+our	$page_namespace			= -100;		# namespace of page
+our $page_is_redirect   	= 'no';
+our $page_is_disambiguation = 'no';
+
+our $page_categories 		= '';
+our $page_interwikis 		= '';
+
+our $page_has_error 		= 'no';		# yes/no 	error in this page
+our $page_error_number		= -1;		# number of all article for this page
+
+our @comments;							# 0 pos_start
+										# 1 pos_end
+										# 2 comment
+our $comment_counter		= -1;		#number of comments in this page
+
+our @category;							# 0 pos_start
+										# 1 pos_end
+										# 2 category	Test
+										# 3 linkname	Linkname
+										# 4 original	[[Category:Test|Linkname]]
+
+our $category_counter		= -1;
+our $category_all			= '';		# all categries
+
+our @interwiki;							# 0 pos_start
+										# 1 pos_end
+										# 2 interwiki	Test
+										# 3 linkname	Linkname
+										# 4 original	[[de:Test|Linkname]]
+										# 5 language
+
+our $interwiki_counter		= -1;
+
+our @lines;								# text seperated in lines
+our @headlines;							# headlines
+our @section;							# text between headlines
+undef(@section);
+
+our @lines_first_blank;					# all lines where the first character is ' '
+
+our @templates_all;						# all templates
+our @template;							# templates with values
+										# 0 number of template
+										# 1 templatename
+										# 2 template_row
+										# 3 attribut
+										# 4 value
+our $number_of_template_parts = -1;		# number of all template parts
+
+our @links_all;							# all links
+our @images_all;						# all images
+our @isbn;								# all ibsn of books
+our @ref;								# all ref
+
+our $page_has_geo_error 	= 'no';		# yes/no 	geo error in this page
+our $page_geo_error_number  = -1;		# number of all article for this page
+
+our $end_of_dump = 'no';				# when last article from dump scan then 'yes', else 'no'
+our $end_of_live = 'no';				# when last article from live scan then 'yes', else 'no'
+
+
+
+
+
+check_input_arguments();
+open_db();
+open_file() 							if ($quit_program eq 'no');			# logfile, dumpfile,  metadata (API, File)
+
+get_error_description()					if ($quit_program eq 'no');			# all errordescription from this script
+load_text_translation() 				if ($quit_program eq 'no');			# load translation from wikipage
+output_errors_desc_in_db() 				if ($quit_program eq 'no');			# update the database with newest error description
+output_text_translation_wiki()  		if ($quit_program eq 'no');			# output the new wikipage for translation
+
+load_article_for_live_scan()  			if ($quit_program eq 'no');			# only for live
+scan_pages() 							if ($quit_program eq 'no');			# scan all aricle
+close_file();																# close dump or templatetiger-file
+
+update_table_cw_error_from_dump()		if ($quit_program eq 'no');
+delete_deleted_article_from_db()		if ($quit_program eq 'no');
+delete_article_from_table_cw_new()		if ($quit_program eq 'no');
+delete_article_from_table_cw_change()	if ($quit_program eq 'no');
+update_table_cw_starter();
+
+#output_errors() 						if ($quit_program eq 'no');
+output_little_statistic()				if ($quit_program eq 'no');			# print counter of found errors
+output_duration() 						if ($quit_program eq 'no');			# print time at the end
+
+print $quit_reason 						if ($quit_reason  ne '');
+
+close_db();
+close_logfile();
+print 'finish'."\n";
+
+
+#################################################################
+#################################################################
+#################################################################
+#################################################################
+#################################################################
 
 
 sub get_time_string{
