@@ -32,28 +32,12 @@ use warnings;
 
 
 #################################################################
-# Load Module
+# Load Modules
 #################################################################
-#use lib "C:/perl/lib";
 
-use URI::Escape;
+use DBI;
 use LWP::UserAgent;
-
-#use CGI::Carp qw(fatalsToBrowser);
-
-#use lib '/home/sk/perl/checkwiki';
-#our $file_module_coordinate = 'coordinates.pm';
-#if (-e $file_module_coordinate) {
-	#use coordinates ;
-#}
-# use new_coordinates;
-
-
-#use lib '../module';
-#use wikipedia;
-
-#use URI::Escape;
-#use LWP::UserAgent;
+use URI::Escape;
 
 #################################################################
 # declare_global_directorys
@@ -581,7 +565,6 @@ sub open_db{
 	# DB
 	#################################################################
 
-	use DBI;
 	#load password
 	open(PWD, "</home/sk/.mytop");
 	my $password = '';
