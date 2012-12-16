@@ -17,7 +17,7 @@
 
 		######################
 		3. Dump scannen
-		perl -w new_checkwiki.pl p=specieswiki m=dump
+		perl checkwiki.pl -p specieswiki -m dump
 
 		######################
 		4. Testen ob Fehler in Datenbank
@@ -30,7 +30,7 @@
 
 		######################
 		6. live scan
-		perl -w new_checkwiki.pl p=svwikisource m=live
+		perl checkwiki.pl -p svwikisource -m live
 
 
 ########################################

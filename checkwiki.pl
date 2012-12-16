@@ -10,7 +10,7 @@
 
 #################################################################
 # Syntax
-# perl -w checkwiki.pl -p=enwiki m=live
+# perl checkwiki.pl -p enwiki -m live
 #################################################################
 
 # New features, last changes and discussion
@@ -36,6 +36,7 @@ use warnings;
 #################################################################
 
 use DBI;
+use Getopt::Long qw(:config bundling no_auto_abbrev no_ignore_case);
 use LWP::UserAgent;
 use URI::Escape;
 
@@ -63,16 +64,16 @@ our $quit_program			= 'no';		# quit the program (yes,no), for quit the programm 
 our $quit_reason			= '';		# quit the program reason
 our $test_programm 			= 'true';	# only for program tests
 
-our $dump_or_live   		= '';		# scan modus (dump, live, only)
-our $silent_modus   		= '';		# silent modus (very low output at screen) for batch
-our $test_modus   			= '';		# silent modus (very low output at screen) for batch
+our $dump_or_live			= '';		# scan modus (dump, live, only)
+our $silent_modus			= 0;		# silent modus (very low output at screen) for batch
+our $test_modus				= 0;		# silent modus (very low output at screen) for batch
 
-our $starter_modus			= '';		# to update in the loadmodus the cw_starter table
-our $load_modus_done		= 'yes';	# done article from db
-our $load_modus_new			= 'yes';	# new article from db
-our $load_modus_dump		= 'yes';	# new article from db
-our $load_modus_last_change = 'yes';	# last_change article from db
-our $load_modus_old			= 'yes';	# old article from db
+our $starter_modus			= 0;		# to update in the loadmodus the cw_starter table
+our $load_modus_done		= 1;		# done article from db
+our $load_modus_new			= 1;		# new article from db
+our $load_modus_dump		= 1;		# new article from db
+our $load_modus_last_change = 1;		# last_change article from db
+our $load_modus_old			= 1;		# old article from db
 
 
 our $details_for_page		= 'no';		# yes/no 	durring the scan you can get more details for a article scan
@@ -83,7 +84,7 @@ our $time_end				= time();	# end time in secound
 our $date					= 0;		# date of dump "20060324"
 
 our $line_number			= 0;		# number of line in dump
-our $project				= '';		# name of the project 'dewiki'
+our $project;							# name of the project 'dewiki'
 our $language				= '';		# language of dump 'de', 'en';
 our $page_number			= 0;		# number of pages in namesroom 0
 our $base 					= '';		# base of article, 'http://de.wikipedia.org/wiki/Hauptseite'
@@ -438,126 +439,82 @@ sub get_time_string{
 	return($result);
 }
 
-sub check_input_arguments{
-	#################################################################
-	# Declaration of parameters (extern)
-	#################################################################
-	if ( @ARGV < 1) {
-		# no parameters
-		$quit_reason = $quit_reason. 'no parameters'."\n\n";
-		$quit_program = 'yes';
-	}
-	###################
-	#check argument value for project
-	my $found_argv = 'no';
-	foreach (@ARGV) {
-		my $current_argv = $_;
-		if ( index($current_argv, 'p=') == 0) {
-			$found_argv = 'yes';
-			$project 	  =	$current_argv;
-			$project	  =~ s/^p=//;
-			$language	  = $project;
-			$language	  =~ s/source$//;
-			$language	  =~ s/wiki$//;
+sub check_input_arguments {
+	my $load_mode;
 
-		}
+	if (!GetOptions ('load=s'  => \$load_mode,
+					 'm=s'	   => \$dump_or_live,
+					 'p=s'	   => \$project,
+					 'silent'  => \$silent_modus,
+					 'starter' => \$starter_modus,
+					 'test'	   => \$test_modus)) {
+		return;
 	}
-	if ($found_argv eq 'no'){
-		# no project name
-		$quit_reason = $quit_reason. 'no project name, for example: "p=dewiki"'."\n\n";
+
+	# Check argument value for scan mode.
+	if ($dump_or_live ne 'dump' &&
+		$dump_or_live ne 'only' &&
+		$dump_or_live ne 'live') {
+		$quit_reason .= "Mode unknown, for example: \"-m dump/live/only\".\n\n";
 		$quit_program = 'yes';
 	}
 
-	####################
-	#check argument value for scanmodus
-	$found_argv = 'no';
-	foreach (@ARGV) {
-		my $current_argv = $_;
-		if (   $current_argv eq 'm=dump'
-			or $current_argv eq 'm=live'
-			or $current_argv eq 'm=only' )
-		{
-			$found_argv = 'yes';
-			$dump_or_live = $current_argv;
-			$dump_or_live =~ s/^m=//;
-		}
-	}
-	if ($found_argv eq 'no'){
-		#no scan modus
-		$quit_reason = $quit_reason. 'modus unknown, for example: "m=dump/live/only"'."\n\n";
+	# Check that a project name is given.
+	if (!defined ($project)) {
+		$quit_reason .= "No project name, for example: \"-p dewiki\".\n\n";
 		$quit_program = 'yes';
 	}
 
-	####################
-	#check argument value for silent or test
-	$found_argv = 'no';
-	foreach (@ARGV) {
-		my $current_argv = $_;
-		#print $current_argv."\n";
-		$silent_modus = 'silent'              if ( $current_argv eq 'silent' );
-		$test_modus   = 'test'                if ( $current_argv eq 'test');
-		$starter_modus   = 'starter'          if ( $current_argv eq 'starter');
+	# Split load mode.
+	if (defined ($load_mode) && $dump_or_live eq 'live') {
+		my %LoadOptions = map { $_ => 1; } split (/\//, $load_mode);
 
-		if ( index($current_argv,'load=')==0 and $dump_or_live eq 'live' ) {
-			#print 'loadmodus'."\n";
-			#print "\t".'Load_modus='.$current_argv."\n";
-			$load_modus_done		= 'no' if (index($current_argv, 'done')        == -1) ;		# done article from db
-			$load_modus_new			= 'no' if (index($current_argv, 'new')         == -1) ;		# new article from db
-			$load_modus_dump		= 'no' if (index($current_argv, 'dump')        == -1) ;		# new article from db
-			$load_modus_last_change = 'no' if (index($current_argv, 'last_change') == -1) ;		# last_change article from db
-			$load_modus_old			= 'no' if (index($current_argv, 'old')         == -1) ;		# old article from db
-
-
-
-		}
+		$load_modus_done		= exists ($LoadOptions {'done'});				# done article from db
+		$load_modus_new			= exists ($LoadOptions {'new'});				# new article from db
+		$load_modus_dump		= exists ($LoadOptions {'dump'});				# new article from db
+		$load_modus_last_change = exists ($LoadOptions {'last_change'});		# last_change article from db
+		$load_modus_old			= exists ($LoadOptions {'old'});				# old article from db
 	}
 
-	if ($quit_program eq 'yes'){
-		#End of Script, because no correct parameter
-		$quit_reason = $quit_reason.'Use for scan a dump'."\n";
-		$quit_reason = $quit_reason.'perl -w checkwiki.pl p=dewiki m=dump'."\n";
-		$quit_reason = $quit_reason.'perl -w checkwiki.pl p=nds_nlwiki m=dump'."\n";
-		$quit_reason = $quit_reason.'perl -w checkwiki.pl p=nds_nlwiki m=dump silent'."\n";
-		$quit_reason = $quit_reason.'perl -w checkwiki.pl p=nds_nlwiki m=dump silent test'."\n\n";
-		$quit_reason = $quit_reason.'Use for scan a list of pages live'."\n";
-		$quit_reason = $quit_reason.'perl -w checkwiki.pl p=dewiki m=live'."\n";
-		$quit_reason = $quit_reason.'perl -w checkwiki.pl p=dewiki m=live silent'."\n";
-		$quit_reason = $quit_reason.'perl -w checkwiki.pl p=dewiki m=live silent test'."\n";
-		$quit_reason = $quit_reason.'perl -w checkwiki.pl p=dewiki m=live silent update_error_desc'."\n";
-		$quit_reason = $quit_reason.'perl -w checkwiki.pl p=dewiki m=live load=new/done/dumpscan/lastchange/old limit=500'."\n"; 	#starter modus
-		$quit_reason = $quit_reason."\n";
-
+	if ($quit_program eq 'yes') {
+		# End of script, because no correct parameter
+		$quit_reason .= "Use for scan a dump\n";
+		$quit_reason .= "perl checkwiki.pl -p dewiki -m dump\n";
+		$quit_reason .= "perl checkwiki.pl -p nds_nlwiki -m dump\n";
+		$quit_reason .= "perl checkwiki.pl -p nds_nlwiki -m dump --silent\n";
+		$quit_reason .= "perl checkwiki.pl -p nds_nlwiki -m dump --silent --test\n\n";
+		$quit_reason .= "Use for scan a list of pages live\n";
+		$quit_reason .= "perl checkwiki.pl -p dewiki -m live\n";
+		$quit_reason .= "perl checkwiki.pl -p dewiki -m live --silent\n";
+		$quit_reason .= "perl checkwiki.pl -p dewiki -m live --silent --test\n";
+		$quit_reason .= "perl checkwiki.pl -p dewiki -m live --load new/done/dump/last_change/old\n";
+		$quit_reason .= "\n";
 	} else {
-
-		# All parameters available and correct
-		# extract parameters
+		$language = $project;
+		$language =~ s/source$//;
+		$language =~ s/wiki$//;
 
 		print "\n";
-		if ($silent_modus ne 'silent') {
-			print '##################################################'."\n";
-			print '########    checkwiki.pl - Version 0.21    ########'."\n";
-
+		if (!$silent_modus) {
+			print "##################################################\n";
+			print "########	   checkwiki.pl - Version 0.21	  #######\n";
 		}
-			print '##################################################'."\n";
-			print 'Start:  '."\t\t".$akJahr.'-'.$akMonat.'-'.$akMonatstag.' '.$akStunden.':'.$akMinuten."\n";
-			print 'Project:'."\t\t". $project."\n";
-		if ($silent_modus ne 'silent') {
-			print 'Modus:  '."\t\t". $dump_or_live. ' (';
-			print 'scan a dump' 					if ($dump_or_live eq 'dump');
-			print 'scan live'   					if ($dump_or_live eq 'live');
-			print 'scan a dump only some errors'	if ($dump_or_live eq 'only');
-			print ')'."\n";
-		}
-
-		if ($test_modus eq 'test') {			#modus only for test
-			$project = $project.'_test';
-			print "\t\t\t".'Test-Modus --> '.$project.'!!!'."\n";
+		print "##################################################\n";
+		print "Start:  \t\t" . $akJahr . '-' . $akMonat . '-' . $akMonatstag . ' ' . $akStunden . ':' . $akMinuten . "\n";
+		print "Project:\t\t" . $project . "\n";
+		if (!$silent_modus) {
+			print "Modus:  \t\t" . $dump_or_live . ' (';
+			print 'scan a dump'					 if ($dump_or_live eq 'dump');
+			print 'scan live'					 if ($dump_or_live eq 'live');
+			print 'scan a dump only some errors' if ($dump_or_live eq 'only');
+			print ")\n";
 		}
 
+		if ($test_modus) {			#modus only for test
+			$project .= '_test';
+			print "\t\t\tTest-Modus --> " . $project . "!!!\n";
+		}
 	}
-
-
-
 }
 
 sub open_db{
@@ -618,13 +575,13 @@ sub close_db{
 
 sub close_logfile{
 	# close logfile
-	close (LOGFILE) if ($starter_modus	ne 'starter');
+	close (LOGFILE) if (!$starter_modus);
 }
 
 ###################################################################################
 sub get_error_description{
 	# this subroutine check out the error description of all possible errors
-	print 'Load all error description'."\n" if ($silent_modus ne 'silent');
+	print 'Load all error description'."\n" if (!$silent_modus);
 	error_list('get_description');
 
 	# count the number of error description
@@ -652,7 +609,7 @@ sub get_error_description{
 
 	}
 	my $output_number = $number_of_error_description -1;
-	print $output_number .' error description in script'."\n" if ($silent_modus ne 'silent');
+	print $output_number .' error description in script'."\n" if (!$silent_modus);
 
 
 }
@@ -674,7 +631,7 @@ sub open_file{
 	################################
 	# open logfile
 	my $log_filename = $output_directory.$project.'/'.$project.'_'.$log_file;
-	open (LOGFILE, '+>'.$log_filename) if ($starter_modus	ne 'starter');
+	open (LOGFILE, '+>'.$log_filename) if (!$starter_modus);
 
 
 
@@ -682,7 +639,7 @@ sub open_file{
 	# if new dump is available
 	if ($dump_or_live eq 'dump') {
 		$dump_filename = search_for_last_dump();
-		print 'Dump_filename:'."\t\t".$dump_filename."\n" 	if ($silent_modus ne 'silent');
+		print 'Dump_filename:'."\t\t".$dump_filename."\n" 	if (!$silent_modus);
 
 
 		my $last_dump_filename = $output_directory.$project.'/'.$project.'_last_dump_name.txt';
@@ -723,10 +680,10 @@ sub open_file{
 			open (LAST_DUMP_NAME, '>'.$last_dump_filename);
 			print LAST_DUMP_NAME $dump_filename;
 			close(LAST_DUMP_NAME);
-			#print 'nice -n 5 perl -w checkwiki.pl p='.$project.' m=dump' ."\n";
+			#print 'nice -n 5 perl checkwiki.pl -p '.$project.' -m dump' ."\n";
 	#		if ($dump_or_live eq 'live') {
 	#			print "\n\n";
-	#			system ('nice -n 5 perl -w checkwiki.pl p='.$project.' m=dump silent') ;
+	#			system ('nice -n 5 perl checkwiki.pl -p '.$project.' -m dump --silent') ;
 	#			print "\n\n";
 	#		}
 		}
@@ -855,7 +812,7 @@ sub load_article_for_live_scan{
 
 	if ($dump_or_live eq 'live' ) {
 		# open list for live
-		print 'Load article for live scan'."\n" if ($silent_modus ne 'silent');
+		print 'Load article for live scan'."\n" if (!$silent_modus);
 		#print 'Data:   '."\t\t".$output_directory.$project.'/'.$project.'_'.$error_list_filename ."\n";
 		if (not (-e $output_directory.$project.'/'.$project.'_'.$error_list_filename )){
 			#$quit_program = 'yes';
@@ -868,11 +825,11 @@ sub load_article_for_live_scan{
 		} else {
 			#read articles(live)
 
-			new_article(250) 						if ($load_modus_new  eq 'yes'); 		# get 250 new article last days
-			last_change_article(50)					if ($load_modus_last_change eq 'yes');	# get 10 change article last days
-			get_done_article_from_database(250)		if ($load_modus_done eq 'yes'); 		# get 250 article which are set as done in the database
+			new_article(250)						if ($load_modus_new);					# get 250 new article last days
+			last_change_article(50)					if ($load_modus_last_change);			# get 10 change article last days
+			get_done_article_from_database(250)		if ($load_modus_done);					# get 250 article which are set as done in the database
 																								# which are not scan_live - NEW: with table cw_dumpscan
-			get_oldest_article_from_database(250)	if ($load_modus_old eq 'yes');			# get 250 article which are the date of last_scan is very old (dump_scan)
+			get_oldest_article_from_database(250)	if ($load_modus_old);					# get 250 article which are the date of last_scan is very old (dump_scan)
 
 
 			#old
@@ -881,7 +838,7 @@ sub load_article_for_live_scan{
 													# replace with done articles
 			#article_with_error_from_dump_scan(); 	# get all articles error from the last dump scan
 													# replace with article_with_error_from_dump_scan2
-			#article_with_error_from_dump_scan2()	if ($load_modus_dump eq 'yes');			# get 250 articles of each error from the last dump scan,
+			#article_with_error_from_dump_scan2()	if ($load_modus_dump);			# get 250 articles of each error from the last dump scan,
 
 			#geo_error_article();					# get all articles with geo errors last days
 
@@ -946,7 +903,7 @@ sub load_article_for_live_scan{
 				$number_of_live_tests = @live_article;
 			}
 			print "\t".$number_of_live_tests."\t".'all articles without double'."\n";
-			print LOGFILE 'articles without double'."\t".$number_of_live_tests."\n" if ($starter_modus	ne 'starter');
+			print LOGFILE 'articles without double'."\t".$number_of_live_tests."\n" if (!$starter_modus);
 			@new_live_article = ();	# free memory
 			@split_line = ();	# free memory
 			#foreach (@live_article) {
@@ -975,7 +932,7 @@ sub article_last_live_scan{
 	close (LIVE);
 	$number_of_live_tests = @live_article;
 	print "\t".$number_of_live_tests."\t".'articles last scan:'."\n";
-	print LOGFILE 'articles last scan:'."\t".$number_of_live_tests."\n" if ($starter_modus	ne 'starter');
+	print LOGFILE 'articles last scan:'."\t".$number_of_live_tests."\n" if (!$starter_modus);
 }
 
 
@@ -1001,7 +958,7 @@ sub new_article{
 		$new_counter ++;
 	}
 	print "\t".$new_counter."\t".'articles new'."\n";
-	print LOGFILE 'articles new:'."\t\t".$new_counter. "\n" if ($starter_modus	ne 'starter');
+	print LOGFILE 'articles new:'."\t\t".$new_counter. "\n" if (!$starter_modus);
 	$for_statistic_new_article = $new_counter;
 }
 
@@ -1031,7 +988,7 @@ sub new_article_old{
 	print "\t".$new_counter."\t".'articles new';
 	print ' (no file: '.$file_new.' )' if not (-e $file_input_new);
 	print "\n";
-	print LOGFILE 'articles new:'."\t\t".$new_counter. "\n" if ($starter_modus	ne 'starter');
+	print LOGFILE 'articles new:'."\t\t".$new_counter. "\n" if (!$starter_modus);
 	$for_statistic_new_article = $new_counter;
 }
 
@@ -1058,7 +1015,7 @@ sub last_change_article{
 		$change_counter ++;
 	}
 	print "\t".$change_counter."\t".'articles change'."\n";
-	print LOGFILE 'articles change:'."\t".$change_counter."\n" if ($starter_modus	ne 'starter');
+	print LOGFILE 'articles change:'."\t".$change_counter."\n" if (!$starter_modus);
 	our $for_statistic_last_change_article = $change_counter;
 }
 
@@ -1090,7 +1047,7 @@ sub last_change_article_old{
 	print "\t".$change_counter."\t".'articles change';
 	print ' (no file: '.$file_last_change.' )' if not (-e $file_input_last_change);
 	print "\n";
-	print LOGFILE 'articles change:'."\t".$change_counter."\n" if ($starter_modus	ne 'starter');
+	print LOGFILE 'articles change:'."\t".$change_counter."\n" if (!$starter_modus);
 	our $for_statistic_last_change_article = $change_counter;
 }
 
@@ -1124,7 +1081,7 @@ sub geo_error_article{
 	print "\t".$geo_counter."\t".'articles geo';
 	print ' (no file: '.$file_geo.' )' if not (-e $file_input_geo);
 	print "\n";
-	print LOGFILE 'articles geo:'."\t\t".$geo_counter."\n" if ($starter_modus	ne 'starter');
+	print LOGFILE 'articles geo:'."\t\t".$geo_counter."\n" if (!$starter_modus);
 	$for_statistic_geo_article = $geo_counter;
 }
 
@@ -1149,7 +1106,7 @@ sub article_with_error_from_dump_scan{
 		$database_dump_scan_counter ++;
 	}
 	print "\t".$database_dump_scan_counter."\t".'articles from dump (not scan live) from db'."\n";
-	print LOGFILE 'articles from dump (not scan live) from db:'."\t\t".$database_dump_scan_counter."\n" if ($starter_modus	ne 'starter');
+	print LOGFILE 'articles from dump (not scan live) from db:'."\t\t".$database_dump_scan_counter."\n" if (!$starter_modus);
 }
 
 
@@ -1181,7 +1138,7 @@ sub article_with_error_from_dump_scan_old_old{
 			system ('rm '.$input_dump_errors);
 		}
 		print "\t".$dump_counter."\t".'articles dump'."\n";
-		print LOGFILE 'articles dump:'."\t\t".$dump_counter."\n" if ($starter_modus	ne 'starter');
+		print LOGFILE 'articles dump:'."\t\t".$dump_counter."\n" if (!$starter_modus);
 
 	}
 }
@@ -1236,7 +1193,7 @@ sub article_with_error_from_dump_scan_old{
 		}
 	}
 	print "\t".$database_dump_scan_counter."\t".'articles from dump (not scan live) from db'."\n";
-	print LOGFILE 'articles from dump (not scan live) from db:'."\t\t".$database_dump_scan_counter."\n" if ($starter_modus	ne 'starter');
+	print LOGFILE 'articles from dump (not scan live) from db:'."\t\t".$database_dump_scan_counter."\n" if (!$starter_modus);
 }
 
 sub get_done_article_from_database{
@@ -1256,7 +1213,7 @@ sub get_done_article_from_database{
 		$database_ok_counter ++;
 	}
 	print "\t".$database_ok_counter."\t".'done articles from db'."\n";
-	print LOGFILE 'done articles from db:'."\t\t".$database_ok_counter."\n" if ($starter_modus	ne 'starter');
+	print LOGFILE 'done articles from db:'."\t\t".$database_ok_counter."\n" if (!$starter_modus);
 }
 
 sub get_oldest_article_from_database{
@@ -1276,7 +1233,7 @@ sub get_oldest_article_from_database{
 		$database_ok_counter ++;
 	}
 	print "\t".$database_ok_counter."\t".'old articles from db'."\n";
-	print LOGFILE 'old articles from db:'."\t\t".$database_ok_counter."\n" if ($starter_modus	ne 'starter');
+	print LOGFILE 'old articles from db:'."\t\t".$database_ok_counter."\n" if (!$starter_modus);
 }
 
 
@@ -1284,7 +1241,7 @@ sub get_oldest_article_from_database{
 
 sub scan_pages{
 	# get the text of the next page
-	print 'Start scanning'."\n" 	if ($silent_modus ne 'silent');
+	print 'Start scanning'."\n" 	if (!$silent_modus);
 
 	$end_of_dump = 'no';	# when last article from dump scan then 'yes', else 'no'
 	$end_of_live = 'no';	# when last article from live scan then 'yes', else 'no'
@@ -1309,7 +1266,7 @@ sub scan_pages{
 		} else {
 			if ( $end_of_dump eq 'yes'
 			 or  $end_of_live eq 'yes' ) {
-				print 'articles scan finish'."\n\n"		if ($silent_modus ne 'silent');
+				print 'articles scan finish'."\n\n"		if (!$silent_modus);
 
 			} else {
 				print 'no check in article:'."\t\t".$title."\n";
@@ -1476,18 +1433,18 @@ sub delete_article_from_table_cw_change 	{
 
 
 sub update_table_cw_starter {
-	if ($starter_modus	eq 'starter') {
-		print 'update_table_cw_starter'."\n"  if ($silent_modus ne 'silent');
+	if ($starter_modus) {
+		print 'update_table_cw_starter'."\n"  if (!$silent_modus);
 		#print "\t".$error_counter."\t".'errors found'."\n";
 		if ($error_counter > 0) {
 			#print '$page_number= '.$page_number."\n";
 			my $sql_text = '';
 			# how much was found
-			$sql_text = "update cw_starter set errors_done =errors_done +".$error_counter." where project ='".$project."';" if ($load_modus_done eq 'yes') ;
-			$sql_text = "update cw_starter set errors_new  =errors_new  +".$error_counter." where project ='".$project."';" if ($load_modus_new eq 'yes') ;
-			$sql_text = "update cw_starter set errors_dump =errors_dump +".$error_counter." where project ='".$project."';" if ($load_modus_dump eq 'yes') ;
-			$sql_text = "update cw_starter set errors_change =errors_change +".$error_counter." where project ='".$project."';" if ($load_modus_last_change eq 'yes') ;
-			$sql_text = "update cw_starter set errors_old =errors_old +".$error_counter." where project ='".$project."';" if ($load_modus_old eq 'yes') ;
+			$sql_text = "update cw_starter set errors_done =errors_done +".$error_counter." where project ='".$project."';" if ($load_modus_done) ;
+			$sql_text = "update cw_starter set errors_new  =errors_new  +".$error_counter." where project ='".$project."';" if ($load_modus_new) ;
+			$sql_text = "update cw_starter set errors_dump =errors_dump +".$error_counter." where project ='".$project."';" if ($load_modus_dump) ;
+			$sql_text = "update cw_starter set errors_change =errors_change +".$error_counter." where project ='".$project."';" if ($load_modus_last_change) ;
+			$sql_text = "update cw_starter set errors_old =errors_old +".$error_counter." where project ='".$project."';" if ($load_modus_old) ;
 			#print $sql_text."\n";
 			my $sth = $dbh->prepare( $sql_text);
 			$sth->execute;
@@ -1499,7 +1456,7 @@ sub update_table_cw_starter {
 			$sth->execute;
 
 
-			if ($load_modus_new ne 'yes' and $load_modus_last_change ne 'yes') {
+			if (!$load_modus_new && $load_modus_last_change) {
 				# was something change?
 				$sql_text = "update cw_starter set last_run_change = 'true' where project ='".$project."';";
 				#print $sql_text."\n";
@@ -1589,7 +1546,7 @@ sub load_metadata_from_file {
 	my $pos1 = index($metatext,'sitename="') + length('sitename="');
 	my $pos2 = index($metatext,'"', $pos1);
 	$sitename = substr($metatext, $pos1, $pos2 - $pos1);
-	print 'Sitename: '."\t\t".$sitename."\n" 	if ($silent_modus ne 'silent');
+	print 'Sitename: '."\t\t".$sitename."\n" 	if (!$silent_modus);
 
 
 
@@ -1598,7 +1555,7 @@ sub load_metadata_from_file {
 	$pos1 = index($metatext,'base="') + length('base="');
 	$pos2 = index($metatext,'"', $pos1 );
 	$base = substr($metatext, $pos1, $pos2 -$pos1);
-	print 'Base:     '."\t\t".$base."\n" 		if ($silent_modus ne 'silent');
+	print 'Base:     '."\t\t".$base."\n" 		if (!$silent_modus);
 	$home = $base;
 	$home =~ s/[^\/]+$//;
 	#print 'Home:     '."\t\t".$home."\n";
@@ -2001,7 +1958,7 @@ sub get_next_page_from_live {
 				my $line = $live_to_scan[$i];
 				my @line_split = split( /\t/, $line);
 				my $next_title 		= $line_split[0];
-				print LOGFILE $next_title."\n" if ($starter_modus	ne 'starter');
+				print LOGFILE $next_title."\n" if (!$starter_modus);
 				$next_title = replace_special_letters($next_title);
 				$many_titles = $many_titles.'|'.uri_escape($next_title);
 				$many_titles =~ s/^\|//;
@@ -2045,7 +2002,7 @@ sub get_next_page_from_live {
 				if ($pos_end == -1){
 					#BIG PROBLEM
 					print 'WARNING: Big problem with API'."\n";
-					print LOGFILE 'WARNING: Big problem with API'."\n" if ($starter_modus	ne 'starter');
+					print LOGFILE 'WARNING: Big problem with API'."\n" if (!$starter_modus);
 					$text		       = '';
 					$xml_text_from_api = '';
 				}
@@ -2278,7 +2235,7 @@ sub raw_text_more_articles {
 	$url2 =~ s/\/wiki\//\/w\//;
 	$url2 = $url2.'api.php?action=query&prop=revisions&titles='.$title.'&rvprop=timestamp|content&format=xml';
 
-	print LOGFILE $url2."\n" if ($starter_modus	ne 'starter');
+	print LOGFILE $url2."\n" if (!$starter_modus);
 	my $response2 ;
 	my $ua2 = LWP::UserAgent->new;
 	$response2 = $ua2->get( $url2 );
@@ -2293,7 +2250,7 @@ sub raw_text_more_articles {
 ####################################
 
 sub load_text_translation{
-	print 'Load tanslation of:'."\t".$project."\n"   if ($silent_modus ne 'silent');
+	print 'Load tanslation of:'."\t".$project."\n"   if (!$silent_modus);
 
 	# Input of translation page
 
@@ -2470,8 +2427,8 @@ sub get_translation_text_XHTML{
 
 
 sub output_errors_desc_in_db{
-	if ($load_modus_done eq 'yes' and $dump_or_live eq 'live') {
-		print 'insert new and update old description in the database'."\n"  if ($silent_modus ne 'silent');
+	if ($load_modus_done and $dump_or_live eq 'live') {
+		print 'insert new and update old description in the database'."\n"  if (!$silent_modus);
 
 	# mysql> desc cw_error_desc;
 	# +-----------------+---------------+------+-----+---------+-------+
@@ -2541,7 +2498,7 @@ sub output_errors_desc_in_db{
 sub output_text_translation_wiki{
 	# Output of translation-file
 	my $filename = $output_directory.$project.'/'.$project.'_'.$translation_file;
-	print 'Output translation:'."\t".$project.'_'.$translation_file."\n"  if ($silent_modus ne 'silent');
+	print 'Output translation:'."\t".$project.'_'.$translation_file."\n"  if (!$silent_modus);
 
 	open(TRANSLATION, ">$filename");
 
@@ -2593,7 +2550,7 @@ sub output_text_translation_wiki{
 	#}
 	#until ($error_description[$number_of_error_description][1] ne '');		# english Headline existed
 
-	print 'error description:'."\t".$number_of_error_description." (-1) \n"   if ($silent_modus ne 'silent');
+	print 'error description:'."\t".$number_of_error_description." (-1) \n"   if (!$silent_modus);
 	print TRANSLATION '#########################'."\n";
 	print TRANSLATION '# error description'."\n";
 	print TRANSLATION '#########################'."\n";
@@ -2638,7 +2595,7 @@ sub output_duration {
 	my $duration_secounds = int(((int(100 * ($duration / 60)) / 100)-$duration_minutes)*60);
 
 	print 'Duration:'."\t\t".$duration_minutes.' minutes '.$duration_secounds.' secounds'."\n";
-	print $project.' '.$dump_or_live."\n" 		if ($silent_modus ne 'silent');
+	print $project.' '.$dump_or_live."\n" 		if (!$silent_modus);
 }
 
 #############################################################################
@@ -2853,7 +2810,7 @@ sub print_article_title_every_x{
 	if (   $page_number == 1 or $page_number == $x ) {
 		print $counter_output;
 	}
-	print LOGFILE $counter_output if ($starter_modus	ne 'starter');
+	print LOGFILE $counter_output if (!$starter_modus);
 
 
 }
@@ -8190,13 +8147,13 @@ sub infotext_change_error{
 sub warn_error{
 	my $msg = shift;
 	print 'WARNING: '.$msg;
-	print LOGFILE 'WARNING: '.$msg if ($starter_modus	ne 'starter');
+	print LOGFILE 'WARNING: '.$msg if (!$starter_modus);
 }
 
 sub die_error{
 	my $msg = shift;
 	print 'DIE ERROR: '.$msg;
-	print LOGFILE 'DIE ERROR: '.$msg if ($starter_modus	ne 'starter');
+	print LOGFILE 'DIE ERROR: '.$msg if (!$starter_modus);
 }
 
 
