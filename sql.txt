@@ -17,7 +17,7 @@
 
 		######################
 		3. Dump scannen
-		perl -w new_checkwiki.pl p=specieswiki m=dump
+		perl checkwiki.pl -p specieswiki -m dump
 
 		######################
 		4. Testen ob Fehler in Datenbank
@@ -30,17 +30,17 @@
 
 		######################
 		6. live scan
-		perl -w new_checkwiki.pl p=svwikisource m=live
+		perl checkwiki.pl -p svwikisource -m live
 
 
 ########################################
 
 create table cw_project
-(id bigint, 
-project varchar(100), 
-lang  varchar(100), 
-last_dump  varchar(100), 
-wikipage  varchar(400), 
+(id bigint,
+project varchar(100),
+lang  varchar(100),
+last_dump  varchar(100),
+wikipage  varchar(400),
 translation_page  varchar(400)
 );
 
@@ -52,8 +52,8 @@ create table cw_dumpscan
 error_id int(12),
 title varchar(4000),
 error int (8),
-notice varchar(4000), 
-ok int(1), 
+notice varchar(4000),
+ok int(1),
 found datetime);
 
 
@@ -173,8 +173,8 @@ insert into cw_overview_errors (project, id, name, name_trans, prio, errors, don
 update cw_overview_errors, (
 select a.project, IFNULL(b.errors,0) errors, b.id  from cw_project a
   left outer join(
-  select count(*) errors, project, error id 
-  from cw_error 
+  select count(*) errors, project, error id
+  from cw_error
   group by project, error
    ) b
   on a.project = b.project) basis
@@ -186,9 +186,9 @@ and cw_overview_errors.id = basis.id;
 update cw_overview_errors, (
 select a.project, IFNULL(b.done,0)done, b.id  from cw_project a
   left outer join(
-  select count(*) done, project, error id 
-  from cw_error 
-  where ok = 1 
+  select count(*) done, project, error id
+  from cw_error
+  where ok = 1
   group by project, error
    ) b
   on a.project = b.project) basis
@@ -198,16 +198,16 @@ and cw_overview_errors.id = basis.id;
 
 --insert errors without detection
 insert into cw_overview_errors (project, id, name, name_trans, prio, errors, done)
-(select a.project, a.id, a.name, a.name_trans, a.prio, null, null 
+(select a.project, a.id, a.name, a.name_trans, a.prio, null, null
 from cw_error_desc a
 left outer join cw_overview_errors b
 on (a.id = b.id and a.project=b.project)
-where b.project is null 
+where b.project is null
 and b.id is null)
 ;
 
 #############################################################
-Statistic for longtime 
+Statistic for longtime
 
 drop table cw_statistic_all;
 create table cw_statistic_all
@@ -315,36 +315,36 @@ group by error_id;
 
 
 -- Liste aller Error_ID mit ungescannten Artikeln
-select error_id, count(*) from 
-	(select * 
-	from cw_dumpscan 
+select error_id, count(*) from
+	(select *
+	from cw_dumpscan
 	where project = 'pdcwiki'
 	and scan_live = false
 	) a
 group by a.error_id
 	;
-	
+
 -- Liste mit Artikeln, die noch nicht gescannt wurden
-select * 	
-from cw_dumpscan 	
-where project = 'pdcwiki' 	
+select *
+from cw_dumpscan
+where project = 'pdcwiki'
 and scan_live = false ;
-	
-	
-	
-	
+
+
+
+
 -- jeweils die ersten 5 Artikel ( Beispiel mit Union)
-select * from 
-	(select * 
-	from cw_dumpscan 
+select * from
+	(select *
+	from cw_dumpscan
 	where project = 'pdcwiki'
 	and scan_live = false
 	and error_id = 30
 	limit 5) a
 union all
-select * from 
-	(select * 
-	from cw_dumpscan 
+select * from
+	(select *
+	from cw_dumpscan
 	where project = 'pdcwiki'
 	and scan_live = false
 	and error_id = 40
@@ -355,7 +355,7 @@ select * from
 - Wie viele dump Artikel noch nicht live gescannt?
 select project,count(*) from cw_dumpscan where scan_live = 0 group by project;
 
--- die ältesten Artikel in der DB 
+-- die ältesten Artikel in der DB
 select found from cw_error where project = 'cswiki' and DATEDIFF(now(),found) > 31 order by DATEDIFF(now(),found) desc limit 25;
 
 -- älter als 100 Tage --> old
