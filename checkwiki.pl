@@ -1,11 +1,10 @@
 #!/usr/local/bin/perl -w
 
 #################################################################
-# Program:	checkwiki.pl
+# Program:	    checkwiki.pl
 # Descrition:	Scan all pages of a Wikipedia-Project (dump or live) for errors
-# Author:	Stefan Kühn
-# Version:	2011-11-27
-# Licence: GPL
+# Author:	    Stefan Kühn
+# Licence:      GPL
 #################################################################
 
 #################################################################
@@ -23,6 +22,8 @@ $SIG{__DIE__} = \&die_error;
 $SIG{__WARN__} = \&warn_error;
 use strict;
 use warnings;
+
+our $VERSION = '2013-01-30';
 
 #################################################################
 
@@ -43,7 +44,8 @@ use URI::Escape;
 #################################################################
 # declare_global_directorys
 #################################################################
-our $dump_directory		    = '/mnt/user-store/dumps/';		# toolserver
+our $dump_directory		    = '/mnt/user-store/dumps/store/';		# toolserver
+our $dump_directory2	    = '/mnt/user-store/dumps/tmp/';	
 # our $dump_directory	= '../../dump/';	# home or usb
 
 our $output_directory		= '/mnt/user-store/sk/data/checkwiki/';
@@ -496,18 +498,18 @@ sub check_input_arguments {
 
 		print "\n";
 		if (!$silent_modus) {
-			print "##################################################\n";
-			print "########	   checkwiki.pl - Version 0.21	  #######\n";
+			print "#########################################################\n";
+			print '########    checkwiki.pl - Version '.$VERSION.'    ########'."\n";
+			print "#########################################################\n";
 		}
-		print "##################################################\n";
-		print "Start:  \t\t" . $akJahr . '-' . $akMonat . '-' . $akMonatstag . ' ' . $akStunden . ':' . $akMinuten . "\n";
-		print "Project:\t\t" . $project . "\n";
+		printf 	"%-20s %-15s\n",	'Start:', $akJahr.'-'.$akMonat.'-'.$akMonatstag.' '.$akStunden.':'.$akMinuten;
+		printf 	"%-20s %-15s\n",	'Project:', $project;
 		if (!$silent_modus) {
-			print "Modus:  \t\t" . $dump_or_live . ' (';
-			print 'scan a dump'					 if ($dump_or_live eq 'dump');
-			print 'scan live'					 if ($dump_or_live eq 'live');
-			print 'scan a dump only some errors' if ($dump_or_live eq 'only');
-			print ")\n";
+			my $modus_output = '';
+			$modus_output = 'scan a dump' 					if ($dump_or_live eq 'dump');
+			$modus_output = 'scan live'   					if ($dump_or_live eq 'live');
+			$modus_output = 'scan a dump only some errors'	if ($dump_or_live eq 'only');
+			printf 	"%-20s %-15s\n",	'Modus:', $dump_or_live. ' ('.$modus_output.')';
 		}
 
 		if ($test_modus) {			#modus only for test
@@ -539,9 +541,9 @@ sub open_db{
 
 	#Connect to database u_sk
 	my $hostname = `hostname`;		# check PC-name
-	print $hostname ."\n";
+	printf 	"%-20s %-15s\n",	'host:', $hostname;
 	if ( $hostname =~ 'kunopc'){
-		$dbh = DBI->connect( 'DBI:mysql:u_sk_cw_p',							# local
+		$dbh = DBI->connect( 'DBI:mysql:u_sk_yarrow',							# local
 							'sk',
 							$password ,
 							{
@@ -659,8 +661,8 @@ sub open_file{
 		open (LAST_DUMP_NAME, '<'.$last_dump_filename);
 		my $last_dump_name_old = '';
 		$last_dump_name_old = <LAST_DUMP_NAME>;
-		#$last_dump_name_old = '' if not defined;
-		$last_dump_name_old =~ s/\n//g;
+		$last_dump_name_old = '' if not defined;
+		chomp ($last_dump_name_old);
 
 		close(LAST_DUMP_NAME);
 
@@ -669,7 +671,9 @@ sub open_file{
 		$dump_date_for_output =~ s/^[^\-]-//g;
 		$dump_date_for_output =~ s/^[^0-9]+//g;
 		$dump_date_for_output =~ s/[^0-9]+$//g;
-		$dump_date_for_output = substr($dump_date_for_output,0,4).'-'.substr($dump_date_for_output,4,2).'-'.substr($dump_date_for_output,6,2);
+		if (length($dump_date_for_output) >=8){
+			$dump_date_for_output = substr($dump_date_for_output,0,4).'-'.substr($dump_date_for_output,4,2).'-'.substr($dump_date_for_output,6,2);
+		}	
 		#print $dump_date_for_output."\n";
 
 
@@ -717,6 +721,9 @@ sub open_file{
 		# check for existens dump
 
 		my $full_dump_path_filename = $dump_directory.$project.'/'.$dump_filename;
+		if (not -e $full_dump_path_filename) {
+		   $full_dump_path_filename = $dump_directory2.'/'.$dump_filename;
+		}
 		#print $full_dump_path_filename."\n";
 
 		if ($dump_filename ne '' and -e $full_dump_path_filename ) {
@@ -773,7 +780,11 @@ sub open_file{
 sub search_for_last_dump {
 	# search in dump_directory for the last XML-file of a project
 	my $last_file ='';
-	my @xml_files = glob($dump_directory.'/'.$project.'/*-pages-articles.xml.bz2');
+    printf 	"%-20s %-15s\n",	'search dump in:', $dump_directory;
+	printf 	"%-20s %-15s\n",	'search dump in:', $dump_directory2;
+	my @xml_files1  = glob($dump_directory .$project.'/*-pages-articles.xml.bz2');		# ../store	
+	my @xml_files2  = glob($dump_directory2.$project.'*-pages-articles.xml.bz2');       # ../tmp
+	my @xml_files = (@xml_files1, @xml_files2); # add both file-arrays
 	my $count_xml_files = @xml_files;
 
 	for (my $i = 0; $i < $count_xml_files; $i++) {
@@ -1374,7 +1385,7 @@ sub update_table_cw_error_from_dump {
 		my $sql_text;
 		my $sth;
 
-		$sql_text = "delete from cw_error where project = '".$project."';";
+		$sql_text = "delete /* SLOW_OK */ from cw_error where project = '".$project."';";
 		$sth = $dbh->prepare( $sql_text );
 		$sth->execute;
 
@@ -1383,12 +1394,12 @@ sub update_table_cw_error_from_dump {
 		#insert into cw_error (select * from cw_dumpscan where project = 'nlwiki' and title like @test);
 		#delete from cw_dumpscan where project = 'nlwiki' and title like @test;
 
-		$sql_text = "insert into cw_error (select * from cw_dumpscan where project = '".$project."');";
+		$sql_text = "insert /* SLOW_OK */ into cw_error (select * from cw_dumpscan where project = '".$project."');";
 		$sth = $dbh->prepare( $sql_text );
 		$sth->execute;
 
 		print 'delete all article from this project in cw_dumpscan'."\n";
-		$sql_text = "delete from cw_dumpscan where project = '".$project."';";
+		$sql_text = "delete /* SLOW_OK */ from cw_dumpscan where project = '".$project."';";
 		$sth = $dbh->prepare( $sql_text );
 		$sth->execute;
 	}
@@ -1398,7 +1409,7 @@ sub update_table_cw_error_from_dump {
 
 sub delete_deleted_article_from_db 	{
 	#delete all deleted article from database
-	my $sql_text2 = "delete from cw_error where ok = 1 and project = '".$project."' and found not like '%".substr(get_time_string(), 0, 7)."%';";
+	my $sql_text2 = "delete /* SLOW_OK */ from cw_error where ok = 1 and project = '".$project."' and found not like '%".substr(get_time_string(), 0, 7)."%';";
 	#print $sql_text2."\n";
 	my $sth = $dbh->prepare( $sql_text2 );
 	$sth->execute;
@@ -1406,13 +1417,13 @@ sub delete_deleted_article_from_db 	{
 
 sub delete_article_from_table_cw_new 	{
 	#delete all scanned or older then 7 days from this project
-	my $sql_text2 = "delete from cw_new where project = '".$project."' and (scan_live = 1 or DATEDIFF(now(),daytime) > 7);";
+	my $sql_text2 = "delete /* SLOW_OK */ from cw_new where project = '".$project."' and (scan_live = 1 or DATEDIFF(now(),daytime) > 7);";
 	#print $sql_text2."\n";
 	my $sth = $dbh->prepare( $sql_text2 );
 	$sth->execute;
 
 	#delete all articles from don't scan projects
-	my $sql_text3 = "delete from cw_new where DATEDIFF(now(),daytime) > 8;";
+	my $sql_text3 = "delete /* SLOW_OK */ from cw_new where DATEDIFF(now(),daytime) > 8;";
 	#print $sql_text2."\n";
 	$sth = $dbh->prepare( $sql_text3 );
 	$sth->execute;
@@ -1420,13 +1431,13 @@ sub delete_article_from_table_cw_new 	{
 
 sub delete_article_from_table_cw_change 	{
 	#delete all scanned or older then 3 days from this project
-	my $sql_text2 = "delete from cw_change where project = '".$project."' and (scan_live = 1 or DATEDIFF(now(),daytime) > 3);";
+	my $sql_text2 = "delete /* SLOW_OK */ from cw_change where project = '".$project."' and (scan_live = 1 or DATEDIFF(now(),daytime) > 3);";
 	#print $sql_text2."\n";
 	my $sth = $dbh->prepare( $sql_text2 );
 	$sth->execute;
 
 	#delete all articles from don't scan projects
-	my $sql_text3 = "delete from cw_change where DATEDIFF(now(),daytime) > 8;";
+	my $sql_text3 = "delete /* SLOW_OK */ from cw_change where DATEDIFF(now(),daytime) > 8;";
 	$sth = $dbh->prepare( $sql_text3 );
 	$sth->execute;
 }
@@ -1500,13 +1511,35 @@ sub read_and_write_metadata_from_dump {
 	$language = 'nds-nl' if ($project eq 'nds_nlwiki');
 
 
+    ###########################
+    # generate URL of project 
+    ###########################
+
 	my $url = 'http://'.$language.'.wikipedia.org/w/api.php';
+	
 	if ($project eq 'commonswiki') {
 		$url = 'http://commons.wikimedia.org/w/api.php';
 	}
+	
 	if ($project =~ /source$/) {
 		$url = 'http://'.$language.'.wikisource.org/w/api.php';
 	}
+	
+	if ($project =~ /wiktionary$/) {
+		# http://en.wiktionary.org/wiki/Main_page
+		my $first_url_part = $project;
+		$first_url_part =~ s/wiktionary$//;
+		$url = 'http://'.$first_url_part.'.wiktionary.org/w/api.php';
+	}
+
+	if ($project =~ /wikiversity$/) {
+		# http://fr.wikiversity.org/wiki/Accueil
+		my $first_url_part = $project;
+		$first_url_part =~ s/wikiversity$//;
+		$url = 'http://'.$first_url_part.'.wikiversity.org/w/api.php';
+	}
+
+
 	$url = $url.'?action=query&meta=siteinfo&siprop=general|namespaces|namespacealiases|statistics|magicwords&format=xml';
 
 	$metadata = raw_text2($url);
@@ -2821,7 +2854,7 @@ sub delete_old_errors_in_db{
 	if ( $dump_or_live eq 'live'
 		 and $page_id
 		 and $title ne '' ) {
-		my $sql_text = "delete from cw_error where error_id = ". $page_id." and  project = '". $project."';";
+		my $sql_text = "delete /* SLOW_OK */ from cw_error where error_id = ". $page_id." and  project = '". $project."';";
 		#print $sql_text."\n\n";
 		my $sth = $dbh->prepare( $sql_text );
 		$sth->execute;
