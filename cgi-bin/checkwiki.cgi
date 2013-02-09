@@ -4,11 +4,10 @@
 # Program:	checkwiki.cgi
 # Descrition:	show all errors of Wikipedia-Project "Check Wikipedia"
 # Author:	Stefan Kühn
-# Version:	2012-11-10
 # Licence: GPL
 #################################################################
 
-our $VERSION = '2012-11-10';
+our $VERSION = '2013-02-09';
 
 
 use strict;

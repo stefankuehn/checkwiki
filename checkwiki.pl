@@ -4693,6 +4693,8 @@ sub error_003_have_ref{
 				 $test = "true" if ( $test_text =~ /\{\{[ ]?+注脚/ );							# in zhwiki
 				 $test = "true" if ( $test_text =~ /\{\{[ ]?+referências/);					# in ptwiki
 				 $test = "true" if ( $test_text =~ /\{\{[ ]?+רעפליסטע/);					# in yiwiki
+				 $test = "true" if ( $test_text =~ /\{\{[ ]?+apèndix/);						# in cawiki
+				 $test = "true" if ( $test_text =~ /\{\{[ ]?+παραπομπές/);					# in elwiki
 
 
 
