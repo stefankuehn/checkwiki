@@ -23,7 +23,7 @@ $SIG{__WARN__} = \&warn_error;
 use strict;
 use warnings;
 
-our $VERSION = '2013-01-30';
+our $VERSION = '2013-02-15';
 
 #################################################################
 
@@ -386,6 +386,7 @@ our $page_geo_error_number  = -1;		# number of all article for this page
 our $end_of_dump = 'no';				# when last article from dump scan then 'yes', else 'no'
 our $end_of_live = 'no';				# when last article from live scan then 'yes', else 'no'
 
+our $statistic_online_page = -1;		# number of pages online from metadata-statistic
 
 
 
@@ -502,19 +503,20 @@ sub check_input_arguments {
 			print '########    checkwiki.pl - Version '.$VERSION.'    ########'."\n";
 			print "#########################################################\n";
 		}
-		printf 	"%-20s %-15s\n",	'Start:', $akJahr.'-'.$akMonat.'-'.$akMonatstag.' '.$akStunden.':'.$akMinuten;
-		printf 	"%-20s %-15s\n",	'Project:', $project;
+		two_column_display('start:', $akJahr.'-'.$akMonat.'-'.$akMonatstag.' '.$akStunden.':'.$akMinuten);		
+		two_column_display('project:', $project);		
+
 		if (!$silent_modus) {
 			my $modus_output = '';
 			$modus_output = 'scan a dump' 					if ($dump_or_live eq 'dump');
 			$modus_output = 'scan live'   					if ($dump_or_live eq 'live');
 			$modus_output = 'scan a dump only some errors'	if ($dump_or_live eq 'only');
-			printf 	"%-20s %-15s\n",	'Modus:', $dump_or_live. ' ('.$modus_output.')';
+			two_column_display ('Modus:', $dump_or_live. ' ('.$modus_output.')');
 		}
 
 		if ($test_modus) {			#modus only for test
 			$project .= '_test';
-			print "\t\t\tTest-Modus --> " . $project . "!!!\n";
+			two_column_display ('Test-Modus:', $project.'!!!');
 		}
 	}
 }
@@ -524,7 +526,7 @@ sub open_db{
 	# DB
 	#################################################################
 
-	#load password
+	#load password from local file
 	open(PWD, "</home/sk/.mytop");
 	my $password = '';
 	do {
@@ -537,11 +539,13 @@ sub open_db{
 	}
 	while (eof(PWD) != 1);
 	close(PWD);
-	#print "-".$password."-\n";
+	
+	
+	my $hostname = `hostname`;			# get name of host (PC-Name)
+	chomp($hostname);
+	two_column_display ('host:', $hostname);
 
-	#Connect to database u_sk
-	my $hostname = `hostname`;		# check PC-name
-	printf 	"%-20s %-15s\n",	'host:', $hostname;
+	#Connect to database u_sk_yarrow
 	if ( $hostname =~ 'kunopc'){
 		$dbh = DBI->connect( 'DBI:mysql:u_sk_yarrow',							# local
 							'sk',
@@ -563,12 +567,8 @@ sub open_db{
 	}
 
 	$password = '';
-
-
-
-
-
 }
+
 
 sub close_db{
 	# close database
@@ -583,7 +583,8 @@ sub close_logfile{
 ###################################################################################
 sub get_error_description{
 	# this subroutine check out the error description of all possible errors
-	print 'Load all error description'."\n" if (!$silent_modus);
+	print_line();
+	two_column_display ('load:', 'all error description from script');
 	error_list('get_description');
 
 	# count the number of error description
@@ -611,8 +612,7 @@ sub get_error_description{
 
 	}
 	my $output_number = $number_of_error_description -1;
-	print $output_number .' error description in script'."\n" if (!$silent_modus);
-
+	two_column_display ('error description:', $output_number.' in script');
 
 }
 
@@ -641,16 +641,16 @@ sub open_file{
 	# if new dump is available
 	if ($dump_or_live eq 'dump') {
 		$dump_filename = search_for_last_dump();
-		print 'Dump_filename:'."\t\t".$dump_filename."\n" 	if (!$silent_modus);
-
+		two_column_display ('Dump_filename:', $dump_filename) if (!$silent_modus);
 
 		my $last_dump_filename = $output_directory.$project.'/'.$project.'_last_dump_name.txt';
-		print $last_dump_filename."\n";
+		two_column_display ('last_dump_filename:', $output_directory.$project.'/');
+		two_column_display ('', $project.'_last_dump_name.txt');
 
 		if (not (-e $last_dump_filename)) {
 			# create the file if not exist
 			system ('touch '.$last_dump_filename);
-			print 'create last_dump_file:'."\t".$project.'_last_dump_name.txt'."\n";
+			two_column_display ('create last_dump_file:', $project.'_last_dump_name.txt');
 			open (LAST_DUMP_NAME_FIRST, '+>'.$last_dump_filename);
 			print LAST_DUMP_NAME_FIRST 'x';
 			close(LAST_DUMP_NAME_FIRST);
@@ -679,8 +679,8 @@ sub open_file{
 
 		if ($dump_filename ne $last_dump_name_old ) {
 			# if not the newest dump then start dump scan
-			print 'Last:    '."\t\t". $last_dump_name_old."\n";
-			print 'Current: '."\t\t". $dump_filename."\n";
+			two_column_display ('Last scanned dump:', $last_dump_name_old);
+			two_column_display ('Current found dump:', $dump_filename);
 			open (LAST_DUMP_NAME, '>'.$last_dump_filename);
 			print LAST_DUMP_NAME $dump_filename;
 			close(LAST_DUMP_NAME);
@@ -693,20 +693,17 @@ sub open_file{
 		}
 
 		#update last_dump time for project in database
-		my $sql_text = "update cw_project set last_dump ='".$dump_date_for_output."' where project = '". $project ."';";
+		my $sql_text = "update /* SLOW_OK */ cw_project set last_dump ='".$dump_date_for_output."' where project = '". $project ."';";
 		my $sth = $dbh->prepare( $sql_text );
 		$sth->execute;
 
 		#delete old list of articles from last dumpscan in table cw_dumpscan
-		my $sql_text2 = "delete from cw_dumpscan where project = '". $project ."';";
+		my $sql_text2 = "delete /* SLOW_OK */ from cw_dumpscan where project = '". $project ."';";
 		$sth = $dbh->prepare( $sql_text2 );
 		$sth->execute;
 
-
-
-
-
 	}
+
 	################################
 
 
@@ -715,7 +712,7 @@ sub open_file{
 	if ($dump_or_live eq 'dump' or $dump_or_live eq 'only') {
 
 
-		#print "lsat=x".$dump_filename."x\n";
+		#print "last=x".$dump_filename."x\n";
 
 
 		# check for existens dump
@@ -730,20 +727,22 @@ sub open_file{
 			#print 'Data:   '."\t\t"."$dump_directory$dump_filename\n";
 			#open dump
 			open(DUMP, "bzip2 -d -q <$full_dump_path_filename |");
-			read_and_write_metadata_from_dump();
+			#read_and_write_metadata_from_url();
 		} else {
 			$quit_program = 'yes';
 			$quit_reason = $quit_reason. "file '$full_dump_path_filename'". " don't exist!\n";
 		}
 
+		#################
 		# Templatetiger
+		#################
 		$templatetiger_filename = $output_templatetiger.$project.'/'.$project.'_templatetiger.txt';
 		if (not (-e $output_templatetiger.$project )) {
-			print 'create new subdirectory'."\t".'templatetiger'."\n";
+			two_column_display ('create new subdirectory', 'templatetiger');
 			system ('mkdir -p '.$output_templatetiger.$project);
 		}
 		if (-e $templatetiger_filename ) {
-			print 'Delete '.$templatetiger_filename."\n";
+			two_column_display ('delete old TT-file:', $project.'_templatetiger.txt');
 			system ('rm -f '.$templatetiger_filename) ;
 		}
 
@@ -751,24 +750,25 @@ sub open_file{
 
 
 
-
-		#GEO Export
+		#################
+		# GEO Export
+        #################
 
 		our $geo_export_filename = $output_geo.$project.'/'.$project.'_coordinates.txt';
 		if (not (-e $output_geo.$project )) {
-			print 'create new subdirectory'."\t".'geo'."\n";
+			two_column_display ('create new subdirectory', 'geo');
 			#mkdir($output_geo.$project ,0777);
 			system ('mkdir -p '.$output_geo.$project);
 		}
 		if (-e $geo_export_filename ) {
-			print 'Delete '.$geo_export_filename."\n";
+			two_column_display ('Delete old Geo-file', $geo_export_filename);
 			system ('rm -f '.$geo_export_filename) ;
 		}
 	}
 
 	# delete old error_list
 	if ($quit_program eq 'no' ) {
-		read_and_write_metadata_from_dump();
+		read_and_write_metadata_from_url();
 		load_metadata_from_file();
 
 	}
@@ -780,8 +780,9 @@ sub open_file{
 sub search_for_last_dump {
 	# search in dump_directory for the last XML-file of a project
 	my $last_file ='';
-    printf 	"%-20s %-15s\n",	'search dump in:', $dump_directory;
-	printf 	"%-20s %-15s\n",	'search dump in:', $dump_directory2;
+	print_line();	
+	two_column_display ('search dump in:', $dump_directory);
+	two_column_display ('search dump in:', $dump_directory2);
 	my @xml_files1  = glob($dump_directory .$project.'/*-pages-articles.xml.bz2');		# ../store	
 	my @xml_files2  = glob($dump_directory2.$project.'*-pages-articles.xml.bz2');       # ../tmp
 	my @xml_files = (@xml_files1, @xml_files2); # add both file-arrays
@@ -823,7 +824,8 @@ sub load_article_for_live_scan{
 
 	if ($dump_or_live eq 'live' ) {
 		# open list for live
-		print 'Load article for live scan'."\n" if (!$silent_modus);
+		print_line();
+		two_column_display('Load article for:', 'live scan') if (!$silent_modus);
 		#print 'Data:   '."\t\t".$output_directory.$project.'/'.$project.'_'.$error_list_filename ."\n";
 		if (not (-e $output_directory.$project.'/'.$project.'_'.$error_list_filename )){
 			#$quit_program = 'yes';
@@ -861,6 +863,7 @@ sub load_article_for_live_scan{
 			# delet all double/multi input article
 			$number_of_live_tests = @live_article;
 			#print $number_of_live_tests."\n";
+
 			my @new_live_article;
 			my @split_line;
 			my @split_line_old;
@@ -913,7 +916,7 @@ sub load_article_for_live_scan{
 				@live_article = @new_live_article;
 				$number_of_live_tests = @live_article;
 			}
-			print "\t".$number_of_live_tests."\t".'all articles without double'."\n";
+			two_column_display('all articles without double:', $number_of_live_tests);
 			print LOGFILE 'articles without double'."\t".$number_of_live_tests."\n" if (!$starter_modus);
 			@new_live_article = ();	# free memory
 			@split_line = ();	# free memory
@@ -942,7 +945,7 @@ sub article_last_live_scan{
 	@live_article = <LIVE>;
 	close (LIVE);
 	$number_of_live_tests = @live_article;
-	print "\t".$number_of_live_tests."\t".'articles last scan:'."\n";
+	two_column_display('from file articles last scan:', $number_of_live_tests);
 	print LOGFILE 'articles last scan:'."\t".$number_of_live_tests."\n" if (!$starter_modus);
 }
 
@@ -968,41 +971,10 @@ sub new_article{
 		push(@live_article, $result."\t".'0' );
 		$new_counter ++;
 	}
-	print "\t".$new_counter."\t".'articles new'."\n";
+	two_column_display('from db articles new:', $new_counter);
 	print LOGFILE 'articles new:'."\t\t".$new_counter. "\n" if (!$starter_modus);
 	$for_statistic_new_article = $new_counter;
 }
-
-sub new_article_old{
-	# Load new articles
-	my $file_new = $project.'_new_article.txt';
-	my $file_input_new = $input_directory_new.$project.'/'.$file_new;
-	my $limit = 250;
-	#print $file_input_new."\n";
-	my $new_counter = 0;
-	if (-e $file_input_new) {
-		#if existing
-		open(INPUT_NEW, "<$file_input_new");
-		do {
-			my $line = <INPUT_NEW>;
-			$line =~ s/\n$//g;
-			my @split_line = split ( /\t/, $line);
-			if ($new_counter < $limit) {
-				push(@live_article, $split_line[1]."\t".'0' );
-				#print $split_line[1]."\t".'0'."\n";
-				$new_counter ++;
-			}
-		}
-		until (eof(INPUT_NEW) == 1);
-		close (INPUT_NEW);
-	}
-	print "\t".$new_counter."\t".'articles new';
-	print ' (no file: '.$file_new.' )' if not (-e $file_input_new);
-	print "\n";
-	print LOGFILE 'articles new:'."\t\t".$new_counter. "\n" if (!$starter_modus);
-	$for_statistic_new_article = $new_counter;
-}
-
 
 
 sub last_change_article{
@@ -1025,39 +997,7 @@ sub last_change_article{
 		push(@live_article, $result."\t".'0' );
 		$change_counter ++;
 	}
-	print "\t".$change_counter."\t".'articles change'."\n";
-	print LOGFILE 'articles change:'."\t".$change_counter."\n" if (!$starter_modus);
-	our $for_statistic_last_change_article = $change_counter;
-}
-
-sub last_change_article_old{
-	# Load last change articles
-	my $file_last_change = $project.'_last_changes.txt';
-	my $file_input_last_change = $input_directory_change.$project.'/'.$file_last_change;
-	#print $file_input_new."\n";
-	my $limit = 10;
-	my $change_counter = 0;
-	if (-e $file_input_last_change) {
-		#if existing
-		#print 'file exist'."\n";
-		open(INPUT_NEW, "<$file_input_last_change");
-		do {
-			my $line = <INPUT_NEW>;
-			if ($line) {
-				$line =~ s/\n$//g;
-				my @split_line = split ( /\t/, $line);
-				if ($change_counter < $limit) {
-					push(@live_article, $split_line[1]."\t".'0' );
-					$change_counter ++;
-				}
-			}
-		}
-		until (eof(INPUT_NEW) == 1);
-		close (INPUT_NEW);
-	}
-	print "\t".$change_counter."\t".'articles change';
-	print ' (no file: '.$file_last_change.' )' if not (-e $file_input_last_change);
-	print "\n";
+	two_column_display('from db articles changed:', $change_counter);
 	print LOGFILE 'articles change:'."\t".$change_counter."\n" if (!$starter_modus);
 	our $for_statistic_last_change_article = $change_counter;
 }
@@ -1089,7 +1029,7 @@ sub geo_error_article{
 		until (eof(INPUT_GEO) == 1);
 		close (INPUT_GEO);
 	}
-	print "\t".$geo_counter."\t".'articles geo';
+	two_column_display('from file articles geo:', $geo_counter);
 	print ' (no file: '.$file_geo.' )' if not (-e $file_input_geo);
 	print "\n";
 	print LOGFILE 'articles geo:'."\t\t".$geo_counter."\n" if (!$starter_modus);
@@ -1116,96 +1056,13 @@ sub article_with_error_from_dump_scan{
 		push(@live_article, $result."\t".'0' );
 		$database_dump_scan_counter ++;
 	}
-	print "\t".$database_dump_scan_counter."\t".'articles from dump (not scan live) from db'."\n";
+
+	two_column_display('from db articles (not scan live):', $database_dump_scan_counter);
+	#print "\t".$database_dump_scan_counter."\t".'articles from dump (not scan live) from db'."\n";
 	print LOGFILE 'articles from dump (not scan live) from db:'."\t\t".$database_dump_scan_counter."\n" if (!$starter_modus);
 }
 
 
-sub article_with_error_from_dump_scan_old_old{
-	if ( $dump_or_live eq 'live') {
-		# if a new dump is available
-		my $input_dump_errors = $output_directory.$project.'/'.$project.'_'.$error_list_filename_dump;
-		#print $file_input_new."\n";
-		my $dump_counter = 0;
-		if (-e $input_dump_errors) {
-			#if existing
-			#print 'file exist'."\n";
-			open(INPUT_DUMP, "<$input_dump_errors");
-			do {
-				my $line = <INPUT_DUMP>;
-				if ($line) {
-					$line =~ s/\n$//g;
-					my @split_line = split ( /\t/, $line);
-					my $number_of_parts = @split_line;
-					if ( $number_of_parts > 0 ) {
-						push(@live_article, $split_line[0]."\t".$split_line[1] );
-						$dump_counter ++;
-					}
-				}
-			}
-			until (eof(INPUT_DUMP) == 1);
-			close (INPUT_DUMP);
-			# delete
-			system ('rm '.$input_dump_errors);
-		}
-		print "\t".$dump_counter."\t".'articles dump'."\n";
-		print LOGFILE 'articles dump:'."\t\t".$dump_counter."\n" if (!$starter_modus);
-
-	}
-}
-
-
-sub article_with_error_from_dump_scan_old{
-	my $database_dump_scan_counter = 0;
-	my $limit = 250;	# number of articles per run
-
-	# get all error_id and create new sql_text
-	my $sql_text = " select error_id from 	(select * 	from cw_dumpscan 	where project = '".$project."' 	and scan_live = false ) a group by a.error_id limit ".$limit.";";
-	my $result = '';
-	my $sth = $dbh->prepare( $sql_text );
-	#print '<p class="smalltext"/>'.$sql_text."</p>\n";
-	$sth->execute;
-	my $union_sql_text = '';
-	my $i = 0;
-	while (my $arrayref = $sth->fetchrow_arrayref()) {
-		foreach(@$arrayref) {
-			$result = $_;
-		}
-		$i = $i +1;
-		#print $result."\n";
-		$union_sql_text .= "union all
-			select title from
-			(select *
-			from cw_dumpscan
-			where project = '".$project."'
-			and scan_live = false
-			and error_id = '".$result."'
-			limit ".$limit.") a".$i."
-		";
-	}
-	$union_sql_text =~ s/^union all//;
-	$union_sql_text = $union_sql_text.';';
-
-	#print $union_sql_text."\n";
-
-	# use union_select, if one or more error found
-	if ($union_sql_text ne ';') {
-
-		$sth = $dbh->prepare( $union_sql_text );
-		#print '<p class="smalltext"/>'.$sql_text."</p>\n";
-		$sth->execute;
-		while (my $arrayref = $sth->fetchrow_arrayref()) {
-			foreach(@$arrayref) {
-				$result = $_;
-			}
-			#print $result."\n";
-			push(@live_article, $result."\t".'0' );
-			$database_dump_scan_counter ++;
-		}
-	}
-	print "\t".$database_dump_scan_counter."\t".'articles from dump (not scan live) from db'."\n";
-	print LOGFILE 'articles from dump (not scan live) from db:'."\t\t".$database_dump_scan_counter."\n" if (!$starter_modus);
-}
 
 sub get_done_article_from_database{
 	my $database_ok_counter = 0;
@@ -1223,7 +1080,7 @@ sub get_done_article_from_database{
 		push(@live_article, $result."\t".'0' );
 		$database_ok_counter ++;
 	}
-	print "\t".$database_ok_counter."\t".'done articles from db'."\n";
+	two_column_display('from db done articles:', $database_ok_counter);
 	print LOGFILE 'done articles from db:'."\t\t".$database_ok_counter."\n" if (!$starter_modus);
 }
 
@@ -1243,7 +1100,7 @@ sub get_oldest_article_from_database{
 		push(@live_article, $result."\t".'0' );
 		$database_ok_counter ++;
 	}
-	print "\t".$database_ok_counter."\t".'old articles from db'."\n";
+	two_column_display('from db old articles:', $database_ok_counter);
 	print LOGFILE 'old articles from db:'."\t\t".$database_ok_counter."\n" if (!$starter_modus);
 }
 
@@ -1252,6 +1109,7 @@ sub get_oldest_article_from_database{
 
 sub scan_pages{
 	# get the text of the next page
+	print_line();
 	print 'Start scanning'."\n" 	if (!$silent_modus);
 
 	$end_of_dump = 'no';	# when last article from dump scan then 'yes', else 'no'
@@ -1482,8 +1340,8 @@ sub update_table_cw_starter {
 
 
 
-sub read_and_write_metadata_from_dump {
-	# read the metadata from dump (<xml … <siteinfo>…</siteinfo>)
+sub read_and_write_metadata_from_url {
+	# read the metadata from url (<xml … <siteinfo>…</siteinfo>)
 	# write this metadata in file for dump and live-scan
 	#print 'Read metadata from dump and write in file'."\n";
 
@@ -1540,6 +1398,8 @@ sub read_and_write_metadata_from_dump {
 	}
 
 
+	print_line();
+	two_column_display('load metadata from:', $url) ;
 	$url = $url.'?action=query&meta=siteinfo&siprop=general|namespaces|namespacealiases|statistics|magicwords&format=xml';
 
 	$metadata = raw_text2($url);
@@ -1548,7 +1408,8 @@ sub read_and_write_metadata_from_dump {
 
 
 	my $file_metadata = $output_directory.$project.'/'.$project.'_metadata.txt';
-	print $file_metadata."\n";
+	two_column_display('save metadata into:', $output_directory) ;
+	two_column_display('', $project.'_metadata.txt') ;
 	open(METADATA, ">$file_metadata");
 	print METADATA $metadata;
 	close(METADATA);
@@ -1579,8 +1440,7 @@ sub load_metadata_from_file {
 	my $pos1 = index($metatext,'sitename="') + length('sitename="');
 	my $pos2 = index($metatext,'"', $pos1);
 	$sitename = substr($metatext, $pos1, $pos2 - $pos1);
-	print 'Sitename: '."\t\t".$sitename."\n" 	if (!$silent_modus);
-
+	two_column_display('Sitename:', $sitename) if (!$silent_modus);
 
 
 	#get base
@@ -1588,7 +1448,7 @@ sub load_metadata_from_file {
 	$pos1 = index($metatext,'base="') + length('base="');
 	$pos2 = index($metatext,'"', $pos1 );
 	$base = substr($metatext, $pos1, $pos2 -$pos1);
-	print 'Base:     '."\t\t".$base."\n" 		if (!$silent_modus);
+	two_column_display('Base:', $base) if (!$silent_modus);
 	$home = $base;
 	$home =~ s/[^\/]+$//;
 	#print 'Home:     '."\t\t".$home."\n";
@@ -1755,11 +1615,31 @@ sub load_metadata_from_file {
 	@magicword_img_bottom		= get_magicword($metatext, 'img_bottom');
 	@magicword_img_text_bottom	= get_magicword($metatext, 'img_text_bottom');
 
-
 	#foreach (@magicword_defaultsort) {
 	#	print $_."\n";
 	#}
 
+
+
+    #########################
+	# read statistic data
+    #########################
+	# for example pdcwiki (2013-02-15)
+	# <statistics pages="4847" articles="1818" edits="97339" images="159" users="12001" activeusers="16" admins="3" jobs="0" />
+	my $statistic_text = 	
+	$pos1 = index($metatext,'<statistics ') + length('<statistics ');
+	$pos2 = index($metatext,'/>', $pos1);
+	$statistic_text = substr($metatext, $pos1, $pos2 -$pos1);
+	my @statistic = split(/ /,$statistic_text);
+	foreach (@statistic) {
+		if ($_ =~ /^pages/) {
+			$statistic_online_page = $_;
+			$statistic_online_page =~ s/pages=//g;
+			$statistic_online_page =~ s/"//g;
+			$statistic_online_page =~ s/ //g;
+			two_column_display('pages online:', $statistic_online_page);
+		}
+	}
 
 }
 
@@ -2283,8 +2163,7 @@ sub raw_text_more_articles {
 ####################################
 
 sub load_text_translation{
-	print 'Load tanslation of:'."\t".$project."\n"   if (!$silent_modus);
-
+		
 	# Input of translation page
 
 	$translation_page = 'Wikipedia:WikiProject Check Wikipedia/Translation'  			if ($project eq 'afwiki') ;
@@ -2325,6 +2204,7 @@ sub load_text_translation{
 	$translation_page = 'װיקיפּעדיע:קאנטראלירן_בלעטער/Translation'  					if ($project eq 'yiwiki') ;
 	$translation_page = '维基百科:错误检查专题/翻译'  											if ($project eq 'zhwiki') ;
 
+	two_column_display('load translation of:', $translation_page) if (!$silent_modus);
 
 	my $translation_input = raw_text($translation_page);
 	$translation_input = replace_special_letters($translation_input);
@@ -2461,7 +2341,7 @@ sub get_translation_text_XHTML{
 
 sub output_errors_desc_in_db{
 	if ($load_modus_done and $dump_or_live eq 'live') {
-		print 'insert new and update old description in the database'."\n"  if (!$silent_modus);
+		two_column_display('Update descripton in DB:', 'insert new and update old error description') if (!$silent_modus);	
 
 	# mysql> desc cw_error_desc;
 	# +-----------------+---------------+------+-----+---------+-------+
@@ -2513,7 +2393,7 @@ sub output_errors_desc_in_db{
 			if ( $x eq '1')  {
 				#print 'Update '.$x.' rows'."\n";
 			} else {
-				print 'new error - description insert into db'."\n";
+				two_column_display('new error:', 'description insert into db');
 				$sql_text2 = "insert into cw_error_desc (project, id, prio, name, text, name_trans, text_trans)
 							values ('". $project."', ". $i.", ".$error_description[$i][4].", '".$sql_headline."' ,'".$sql_desc."',
 							'".$sql_headline_trans."' ,'".$sql_desc_trans."' );";
@@ -2531,8 +2411,7 @@ sub output_errors_desc_in_db{
 sub output_text_translation_wiki{
 	# Output of translation-file
 	my $filename = $output_directory.$project.'/'.$project.'_'.$translation_file;
-	print 'Output translation:'."\t".$project.'_'.$translation_file."\n"  if (!$silent_modus);
-
+	two_column_display('Output translation text to:', $project.'_'.$translation_file) if (!$silent_modus);	
 	open(TRANSLATION, ">$filename");
 
 	#######################################
@@ -2583,7 +2462,10 @@ sub output_text_translation_wiki{
 	#}
 	#until ($error_description[$number_of_error_description][1] ne '');		# english Headline existed
 
-	print 'error description:'."\t".$number_of_error_description." (-1) \n"   if (!$silent_modus);
+    my $number_of_error_description_output = $number_of_error_description -1;
+    two_column_display('error description:', $number_of_error_description_output. ' error description total' ) if (!$silent_modus);	
+	
+
 	print TRANSLATION '#########################'."\n";
 	print TRANSLATION '# error description'."\n";
 	print TRANSLATION '#########################'."\n";
@@ -2635,7 +2517,7 @@ sub output_duration {
 
 sub check_article{
 
-	my $steps = 500;
+	my $steps = 1;
 	$steps = 1 if ($dump_or_live eq 'live');
     $steps = 5000 if ($silent_modus eq 'silent');
 
@@ -2830,18 +2712,23 @@ sub print_article_title_every_x{
 	my $x = int( $page_number / $steps ) * $steps ;
 	my $counter_output = '';
 	my $project_output = $project;
-	$project_output =~ s/wiki//;
-	$counter_output .= $project_output.' ';
-	$counter_output .= 'p='.$page_number.' ';
+	$project_output =~ s/wiki$//;
+	#$counter_output .= $project_output.' ';
+	#$counter_output .= 'p='.$page_number.' ';
 
-	if ($dump_or_live eq 'live') {
-		my $output_current_live_article = $current_live_article + 1;
-		$counter_output .= $current_live_error_scan.'/'.$output_current_live_article.'/'.$number_article_live_to_scan;
-	}
-	$counter_output .= ' id='.$page_id.' ';
-	$counter_output .= $title."\n";
+	#$statistic_online_page
+
+
+	#$counter_output .= ' id='.$page_id.' ';
+	#$counter_output .= $title."\n";
 	if (   $page_number == 1 or $page_number == $x ) {
-		print $counter_output;
+		#print $counter_output;
+		my $percent = int($page_number/$statistic_online_page*100).'%';
+		if ($dump_or_live eq 'live') {
+			my $output_current_live_article = $current_live_article + 1;
+			$percent = $output_current_live_article.'/'.$number_article_live_to_scan;
+		}		
+		printf "%-3s %-8s %-5s %-8s %-40s\n", $project_output, 'p='.$page_number, $percent, 'id='.$page_id, $title;
 	}
 	print LOGFILE $counter_output if (!$starter_modus);
 
@@ -3648,7 +3535,7 @@ sub get_templates{
 
 			foreach (@template_split) {
 				$template_part = $template_part.$_;
-				print "\t".'Test this: '.$template_part."\n" if ($details_for_page eq 'yes');
+				print "\t".'Test this templatepart: '.$template_part."\n" if ($details_for_page eq 'yes');
 
 				# check for []
 				my $template_part1 = $template_part;
@@ -6169,6 +6056,7 @@ sub error_046_count_square_breaks_begin{
 
 			if ( ($text_test_1_a =~ s/\[\[//g) != ($text_test_1_b =~ s/\]\]//g) ) {
 				my $found_text = '';
+				my $begin_time = time();
 				while($text_test =~ /\]\]/g) {
 					#Begin of link
 					my $pos_end = pos($text_test) - 2;
@@ -6190,7 +6078,7 @@ sub error_046_count_square_breaks_begin{
 						$end_square_brackets = ($link_text_2_b =~ s/\]\]//g);
 
 						#print $beginn_square_brackets .' vs. '.$end_square_brackets."\n";
-						last if ($beginn_square_brackets eq $end_square_brackets);
+						last if ($beginn_square_brackets eq $end_square_brackets or $begin_time + 60 > time() );
 
 					}
 
@@ -6203,7 +6091,7 @@ sub error_046_count_square_breaks_begin{
 						#$link_text = '…'.substr($link_text, length($link_text)-50 ).']]';
 					}
 
-					last if ($found_text ne '');		# end if a problem was found, no endless run
+					last if ($found_text ne '' or $begin_time + 60 > time());		# end if a problem was found, no endless run
 				}
 
 				if ( $found_text ne '') {
@@ -6246,6 +6134,7 @@ sub error_047_template_no_correct_begin{
 
 			if ( ($text_test_1_a =~ s/\{\{//g) != ($text_test_1_b =~ s/\}\}//g) ) {
 				#print 'Error 47 not equl $title'."\n";
+				my $begin_time = time();
 				while($text_test =~ /\}\}/g) {
 					#Begin of link
 					my $pos_end = pos($text_test) - 2;
@@ -6260,14 +6149,14 @@ sub error_047_template_no_correct_begin{
 						$link_text_2 = ' '.$link_text_2.' ';
 						#print $link_text_2."\n";
 
-						# test the number of [[and  ]]
+						# test the number of [[and  ]] 
 						my $link_text_2_a = $link_text_2;
 						$beginn_square_brackets = ($link_text_2_a =~ s/\{\{//g);
 						my $link_text_2_b = $link_text_2;
 						$end_square_brackets = ($link_text_2_b =~ s/\}\}//g);
 
 						#print $beginn_square_brackets .' vs. '.$end_square_brackets."\n";
-						last if ($beginn_square_brackets eq $end_square_brackets);
+						last if ($beginn_square_brackets eq $end_square_brackets or $begin_time + 60 > time());
 					}
 
 					if ($beginn_square_brackets != $end_square_brackets ) {
@@ -7987,8 +7876,8 @@ sub error_092_headline_double {
 sub error_register {
 	# all errors will be regestrie
 
-	my $error_code = $_[0];
-	my $notice = $_[1];
+	my $error_code = shift;
+	my $notice = shift;
 
 
 	if ( 	($error_description[$error_code][0] > 0 and $error_description[$error_code][4] == -1) 	#in script activated and in project unknown
@@ -8017,15 +7906,20 @@ sub error_register {
 }
 
 sub insert_into_db{
-	my $error_counter =$_[0];
-	my $article = $_[1];
-	my $code = $_[2];
-	my $notice = $_[3];
-	$notice = substr($notice, 0, 3999) if (length($notice) > 3999);
-	$notice =~ s/'/\\'/g;
-	$notice =~ s/[^\\]\\\\'/\\\\\\'/g;		# fr:Orthose "Gordon\'s Mineralogy of Pennsylvania (1922) p. 191"
-	$article =~ s/'/\\'/g;
-	$article =~ s/[^\\]\\\\'/\\\\\\'/g;
+	#print 'insert_into_db'."\n";	
+	my $error_counter =shift;
+	my $article       =shift;
+	my $code          =shift;
+	my $notice        =shift;
+
+
+
+	$article = text_for_mysql($article);	
+	$notice  = substr($notice, 0, 3999) if (length($notice) > 3999);    # column is only varchar(4000)
+	$notice  = substr($notice, 0, 100) if (length($notice) > 100);    # column is only varchar(4000)
+	$notice  = text_for_mysql($notice);	
+	
+
 
 	#insert error in database
 	my $sql_text = "insert into ";
@@ -8045,6 +7939,7 @@ sub insert_into_db{
 	#print $page_id."\t".$article."\t".$notice. "\n";# if ($page_id > 1960);
 	$sth->execute;
 
+
 }
 
 
@@ -8052,53 +7947,47 @@ sub insert_into_db{
 
 sub set_article_as_scan_live_in_db{
 	# if an article was scan live, than set this in the table cw_dumpscan as true
-	my $article = $_[0];
-	my $id = $_[1];
-
+	#print 'set_article_as_scan_live_in_db'."\n";	
+	my $article = shift;
+	my $id      = shift;
 	my $sql_text;
 	my $sth;
 
-	# problem: title of an article is "  Ali's Bar   "
-	$article =~ s/'/\\'/g;
-	$article =~ s/[^\\]\\\\'/\\\\\\'/g;
+	$article  = text_for_mysql($article);
 
 	#update in the table cw_dumpscan
 	#my $sql_text = "update cw_dumpscan set scan_live = true where project = '".$project."' and (title = '".$article."' or id = ".$id.");";
 	#my $sth = $dbh->prepare( $sql_text );
 	#$sth->execute;
 
-	#update in the table cw_new
-	$sql_text = "update cw_new set scan_live = true where project = '".$project."' and title = '".$article."';";
+	#update in the table cw_new and cw_change
+	$sql_text  = "update /* SLOW_OK */ cw_new    set scan_live = true where project = '".$project."' and title = '".$article."';";
 	$sth = $dbh->prepare( $sql_text );
-	$sth->execute;
+	$sth->execute or die ('article:'.$article."\n".$dbh->errstr);;
 
-	#update in the table cw_change
-	$sql_text = "update cw_change set scan_live = true where project = '".$project."' and title = '".$article."';";
+	$sql_text = "update /* SLOW_OK */ cw_change set scan_live = true where project = '".$project."' and title = '".$article."';";
+	#print $sql_text."\n";
 	$sth = $dbh->prepare( $sql_text );
-	$sth->execute;
+	$sth->execute or die ('article:'.$article."\n".$dbh->errstr);;
 
 }
 
 
 sub insert_into_db_table_tt{
 	# if a new error where found in the dump, then write this into the database table cw_dumpscan
-	my $article   = $_[0];
-	my $page_id   = $_[1];
-	my $template  = $_[2];
-	my $name      = $_[3];
-	my $number    = $_[4];
-	my $parameter = $_[5];
-	my $value     = $_[6];
+	my $article   = shift;
+	my $page_id   = shift;
+	my $template  = shift;
+	my $name      = shift;
+	my $number    = shift;
+	my $parameter = shift;
+	my $value     = shift;
 
 	# problem: title of an article is "  Ali's Bar   "
-	$article =~ s/'/\\'/g;
-	$article =~ s/[^\\]\\\\'/\\\\\\'/g;
-	$name =~ s/'/\\'/g;
-	$name =~ s/[^\\]\\\\'/\\\\\\'/g;
-	$parameter =~ s/'/\\'/g;
-	$parameter =~ s/[^\\]\\\\'/\\\\\\'/g;
-	$value =~ s/'/\\'/g;
-	$value =~ s/[^\\]\\\\'/\\\\\\'/g;
+	$article   = text_for_mysql($article);
+	$name      = text_for_mysql($name);
+	$parameter = text_for_mysql($parameter);
+	$value     = text_for_mysql($value);
 	#insert error in database
 	my $sql_text = "insert into tt (project, id, title, template, name, number, parameter, value) values ( '". $project."', '".$page_id."', '".$article."', ".$template.",
 	'".$name."', ".$number." , '".$parameter."', '".$value."' );";
@@ -8108,6 +7997,28 @@ sub insert_into_db_table_tt{
 	#print LOGFILE $sql_text."\n\n";
 #	my $sth = $dbh->prepare( $sql_text );			# deactivate for a moment
 #	$sth->execute;
+}
+
+
+
+sub text_for_mysql{
+	my $text_input = shift;
+	my $text_output = $text_input;	
+	
+	# problem: sql-command insert, apostrophe ' or backslash \ in text 
+	# problem: "Ali's Bar"
+	# problem: "\"   (enwiktionary)
+	$text_output =~ s/\\/\\\\/g;
+	$text_output =~ s/'/\\'/g;
+	# old	$text =~ s/'/\\'/g;
+	# old	$text =~ s/[^\\]\\\\'/\\\\\\'/g;
+	
+	#if ($text_output ne $text_input) {
+	#	print 'input ='.$text_input."\n";
+	#	print 'output='.$text_output."\n";
+	#}
+
+	return $text_output;
 }
 
 
@@ -8166,6 +8077,20 @@ sub special_test {
 		close (FILE_TEST);
 	}
 }
+
+sub print_line {
+	#prinnt a line for better structure of output
+	print '-' x 80 ;
+	print "\n";
+}
+
+sub two_column_display{
+	# print all output in two column well formed
+	my $text1 = shift;
+	my $text2 = shift;
+	printf 	"%-30s %-30s\n",$text1, $text2;
+}
+
 
 sub infotext_new_error{
 	my $infotext = $_[0];
