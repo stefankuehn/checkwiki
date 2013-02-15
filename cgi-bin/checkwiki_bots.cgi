@@ -47,18 +47,18 @@ if (    $param_project ne ''
     and $param_action  eq 'list'
     and $param_id      =~ /^[0-9]+$/) {
 	# Action : List articles
-	print list_articles($request, $param_project, $param_id, $param_offset, $param_limit);
+	list_articles($request, $param_project, $param_id, $param_offset, $param_limit);
 
 } elsif (    $param_project ne ''
          and $param_action  eq 'mark'
          and $param_id      =~ /^[0-9]+$/
          and $param_pageid  =~ /^[0-9]+$/) {
 	# Action : Mark error as fixed
-	print mark_article_done($request, $param_project, $param_id, $param_pageid);
+	mark_article_done($request, $param_project, $param_id, $param_pageid);
 
 } else {
 	# Incorrect usage
-	print show_usage($request);
+	show_usage($request);
 }
 
 
@@ -69,7 +69,7 @@ sub list_articles{
 	my $error = shift;
 	my $offset = shift;
 	my $limit = shift;
-	my $error = shift;
+	
 
 	# Execute request to retrieve list of articles
 	my $dbh = connect_database();
@@ -82,6 +82,7 @@ sub list_articles{
 		and b.project = '".$project."'
 		group by a.title, a.notice, a.error_id
 		limit ".$offset.",".$limit.";";
+
 	my $sth = $dbh->prepare( $sql_text )  ||  die "Kann Statement nicht vorbereiten: $DBI::errstr\n";
 	$sth->execute or die $sth->errstr; # hier geschieht die Anfrage an die DB
 
